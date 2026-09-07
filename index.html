@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cockpit AGI Eléctrica</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;650&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+<style>
+  :root{
+    --paper:#f5f2ea; --surface:#ffffff; --surface-2:#faf7f0;
+    --ink:#1c1f24; --ink-muted:#5b6169; --ink-faint:#8a8f98;
+    --line:#dedacd; --line-strong:#c7c2b2;
+    --accent:#2c5cc5; --accent-ink:#ffffff; --accent-soft:#e4ecfb;
+    --good:#1f7a4d; --good-soft:#e4f3ea;
+    --warning:#a8720c; --warning-soft:#fbf0dc;
+    --critical:#c0392b; --critical-soft:#fceae8;
+    --proj-raices:#3b6fd1; --proj-condell:#c77d2e; --proj-tsm:#2f9e82; --proj-cdp4:#8b5fbf; --proj-other:#6b7280;
+    --shadow: 0 1px 2px rgba(28,31,36,.06), 0 4px 14px rgba(28,31,36,.05);
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#14171b; --surface:#1b2027; --surface-2:#20262e;
+      --ink:#e9e6dd; --ink-muted:#a0a7b0; --ink-faint:#6b7280;
+      --line:#2a2f37; --line-strong:#394049;
+      --accent:#6e9cf0; --accent-ink:#0b1220; --accent-soft:#1e2a44;
+      --good:#4ade93; --good-soft:#163524;
+      --warning:#f0b429; --warning-soft:#3a2c0e;
+      --critical:#f1595c; --critical-soft:#3a1616;
+      --proj-raices:#5b8ae6; --proj-condell:#b87330; --proj-tsm:#3faa90; --proj-cdp4:#a17ed1; --proj-other:#8a93a3;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 18px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#14171b; --surface:#1b2027; --surface-2:#20262e;
+    --ink:#e9e6dd; --ink-muted:#a0a7b0; --ink-faint:#6b7280;
+    --line:#2a2f37; --line-strong:#394049;
+    --accent:#6e9cf0; --accent-ink:#0b1220; --accent-soft:#1e2a44;
+    --good:#4ade93; --good-soft:#163524;
+    --warning:#f0b429; --warning-soft:#3a2c0e;
+    --critical:#f1595c; --critical-soft:#3a1616;
+    --proj-raices:#5b8ae6; --proj-condell:#b87330; --proj-tsm:#3faa90; --proj-cdp4:#a17ed1; --proj-other:#8a93a3;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 18px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box;}
+  body{background:var(--paper); color:var(--ink); font-family:"IBM Plex Sans",system-ui,sans-serif; line-height:1.45;}
+  h1,h2,h3{font-weight:650; text-wrap:balance; margin:0;}
+  .num, .tabular{font-family:"IBM Plex Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums;}
+  a{color:var(--accent);}
+  ::selection{background:var(--accent-soft);}
+
+  .shell{max-width:1180px; margin:0 auto; padding:0 20px 64px;}
+
+  /* ---------- topbar ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:20; background:var(--paper);
+    border-bottom:1px solid var(--line); padding:14px 20px;
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  }
+  .brand{display:flex; align-items:center; gap:10px; margin-right:auto;}
+  .brand svg{width:26px; height:26px; flex:none;}
+  .brand-text{display:flex; flex-direction:column; line-height:1.15;}
+  .brand-text b{font-size:15px; letter-spacing:.01em;}
+  .brand-text span{font-size:11.5px; color:var(--ink-muted); text-transform:uppercase; letter-spacing:.08em;}
+  .snapshot-tabs{display:flex; gap:6px; flex-wrap:wrap;}
+  .snap-tab{
+    font-family:"IBM Plex Mono",monospace; font-size:12.5px; padding:6px 11px;
+    border:1px solid var(--line-strong); border-radius:999px; background:var(--surface);
+    color:var(--ink-muted); cursor:pointer;
+  }
+  .snap-tab.active{background:var(--accent); border-color:var(--accent); color:var(--accent-ink);}
+
+  /* ---------- upload dock ---------- */
+  .dock{
+    margin-top:22px; border:1.5px dashed var(--line-strong); border-radius:var(--radius);
+    background:var(--surface); padding:22px; display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+    transition:border-color .15s, background .15s;
+  }
+  .dock.dragover{border-color:var(--accent); background:var(--accent-soft);}
+  .dock-icon{width:38px; height:38px; flex:none; color:var(--accent);}
+  .dock-text{flex:1; min-width:220px;}
+  .dock-text b{font-size:14.5px;}
+  .dock-text p{margin:3px 0 0; font-size:12.8px; color:var(--ink-muted);}
+  .dock button{
+    font:600 13px "IBM Plex Sans",sans-serif; padding:9px 16px; border-radius:8px; border:1px solid var(--accent);
+    background:var(--accent); color:var(--accent-ink); cursor:pointer;
+  }
+  .dock button:hover{filter:brightness(1.06);}
+
+  .manifest{margin-top:12px; display:flex; flex-direction:column; gap:6px;}
+  .manifest-row{
+    display:flex; align-items:center; gap:10px; font-size:12.8px; background:var(--surface);
+    border:1px solid var(--line); border-radius:8px; padding:8px 12px;
+  }
+  .manifest-row .fname{font-family:"IBM Plex Mono",monospace; color:var(--ink); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .tag{font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; padding:3px 8px; border-radius:999px; font-weight:600;}
+  .tag.panel{background:var(--accent-soft); color:var(--accent);}
+  .tag.cxc{background:var(--good-soft); color:var(--good);}
+  .tag.hh{background:var(--warning-soft); color:var(--warning);}
+  .tag.unknown{background:var(--critical-soft); color:var(--critical);}
+  .manifest-row select{font:500 11.5px "IBM Plex Sans",sans-serif; border:1px solid var(--line-strong); border-radius:6px; background:var(--surface); color:var(--ink); padding:3px 6px;}
+  .manifest-row .rm{cursor:pointer; color:var(--ink-faint); font-size:15px; line-height:1; border:none; background:none; padding:2px 4px;}
+  .manifest-row .rm:hover{color:var(--critical);}
+
+  .demo-banner{
+    margin-top:16px; display:flex; align-items:center; gap:10px; font-size:13px;
+    background:var(--warning-soft); color:var(--warning); border:1px solid var(--warning); border-radius:8px; padding:10px 14px;
+  }
+  .demo-banner b{font-weight:650;}
+
+  /* ---------- KPI row ---------- */
+  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin-top:26px;}
+  .kpi{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px;
+    box-shadow:var(--shadow); display:flex; flex-direction:column; gap:6px; position:relative;
+  }
+  .kpi .label{font-size:11.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-muted); font-weight:600;}
+  .kpi .value{font-family:"IBM Plex Mono",monospace; font-size:23px; font-weight:600; letter-spacing:-.01em;}
+  .kpi .sub{font-size:12px; color:var(--ink-muted);}
+  .kpi .pill{position:absolute; top:14px; right:14px; font-size:10px; padding:2px 7px; border-radius:999px; font-weight:600; text-transform:uppercase; letter-spacing:.05em;}
+  .pill.good{background:var(--good-soft); color:var(--good);}
+  .pill.warning{background:var(--warning-soft); color:var(--warning);}
+  .pill.critical{background:var(--critical-soft); color:var(--critical);}
+
+  /* ---------- panels ---------- */
+  .panel{margin-top:34px;}
+  .panel-head{display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:14px; flex-wrap:wrap;}
+  .panel-head h2{font-size:18px;}
+  .panel-head .src{font-size:11.5px; color:var(--ink-faint); font-family:"IBM Plex Mono",monospace;}
+  .empty-note{font-size:13px; color:var(--ink-muted); background:var(--surface); border:1px dashed var(--line-strong); border-radius:var(--radius); padding:16px; text-align:center;}
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  .table-wrap{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); box-shadow:var(--shadow);}
+  th,td{padding:9px 12px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap;}
+  th:first-child, td:first-child{text-align:left; white-space:normal;}
+  th{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-muted); font-weight:600; background:var(--surface-2); position:sticky; top:0;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr.total-row td{font-weight:650; background:var(--surface-2);}
+  td.neg{color:var(--critical);}
+
+  .chart-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:18px 18px 6px;}
+  .legend{display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--ink-muted); margin-bottom:10px;}
+  .legend span{display:inline-flex; align-items:center; gap:6px;}
+  .legend i{width:10px; height:10px; border-radius:2px; display:inline-block;}
+
+  .proyectos-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px;}
+  .proy-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px 18px;}
+  .proy-card .proy-head{display:flex; align-items:center; gap:8px; margin-bottom:10px;}
+  .proy-dot{width:10px; height:10px; border-radius:50%; flex:none;}
+  .proy-card h3{font-size:14.5px;}
+  .proy-row{display:flex; justify-content:space-between; font-size:12.8px; padding:4px 0; color:var(--ink-muted);}
+  .proy-row b{color:var(--ink); font-family:"IBM Plex Mono",monospace; font-weight:500;}
+  .bar-track{height:7px; border-radius:99px; background:var(--surface-2); margin:10px 0 4px; overflow:hidden; border:1px solid var(--line);}
+  .bar-fill{height:100%; border-radius:99px;}
+  .bar-label{display:flex; justify-content:space-between; font-size:11px; color:var(--ink-faint);}
+
+  .hh-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px;}
+  .hh-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px 18px;}
+  .hh-card h3{font-size:12.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-muted); margin-bottom:12px;}
+  .hh-item{display:grid; grid-template-columns:88px 1fr 46px; align-items:center; gap:8px; font-size:12px; margin-bottom:7px;}
+  .hh-item .hh-name{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-muted);}
+  .hh-item .hh-track{height:8px; border-radius:4px; background:var(--surface-2); overflow:hidden;}
+  .hh-item .hh-fill{height:100%; background:var(--proj-raices); border-radius:4px;}
+  .hh-item .hh-val{font-family:"IBM Plex Mono",monospace; text-align:right; color:var(--ink);}
+
+  .tooltip{
+    position:fixed; pointer-events:none; background:var(--ink); color:var(--paper); font-size:12px;
+    font-family:"IBM Plex Mono",monospace; padding:8px 10px; border-radius:7px; box-shadow:var(--shadow);
+    opacity:0; transform:translate(-50%,-110%); transition:opacity .08s; z-index:50; white-space:nowrap;
+  }
+  :root[data-theme="dark"] .tooltip, @media (prefers-color-scheme:dark){ .tooltip{color:var(--paper);} }
+
+  footer{margin-top:48px; padding-top:20px; border-top:1px solid var(--line); font-size:12px; color:var(--ink-faint); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;}
+
+  .visually-hidden{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0);}
+  @media (max-width:640px){
+    .kpis{grid-template-columns:1fr 1fr;}
+    th,td{padding:7px 8px; font-size:12px;}
+  }
+
+  /* ================= login gate ================= */
+  #loginGate{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; background:var(--paper); }
+  .login-card{ width:100%; max-width:380px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:28px 26px; }
+  .login-card .brand-text b{font-size:16px;}
+  .login-card h1{ font-size:17px; margin:18px 0 6px; }
+  .login-card p{ font-size:13px; color:var(--ink-muted); line-height:1.5; margin-bottom:16px; }
+  .login-card input{ width:100%; box-sizing:border-box; font-family:inherit; font-size:14px; padding:10px 12px; border:1px solid var(--line-strong); border-radius:8px; background:var(--surface-2); color:var(--ink); margin-bottom:10px; }
+  .login-card input:focus{ outline:2px solid var(--accent); outline-offset:1px; }
+  .login-card button{ width:100%; font-family:inherit; font-size:13.5px; font-weight:600; padding:10px 12px; border-radius:8px; border:none; background:var(--accent); color:var(--accent-ink); cursor:pointer; }
+  .login-card button:disabled{ opacity:.5; cursor:default; }
+  .login-card .msg{ font-size:12.5px; margin-top:10px; min-height:16px; }
+  .login-card .msg.err{ color:var(--critical); }
+  .login-card .msg.ok{ color:var(--good); }
+  .login-card .back-link{ display:inline-block; margin-top:12px; font-size:12.5px; color:var(--ink-faint); cursor:pointer; text-decoration:underline; }
+  [hidden]{ display:none !important; }
+  .who{ display:flex; align-items:center; gap:10px; font-size:12px; color:var(--ink-faint); }
+  .who button{ font-family:inherit; font-size:12px; padding:5px 10px; border-radius:6px; border:1px solid var(--line-strong); background:var(--surface); color:var(--ink-muted); cursor:pointer; }
+  .sync-dot{ width:7px; height:7px; border-radius:50%; background:var(--good); flex:none; }
+  .sync-dot.syncing{ background:var(--warning); }
+</style>
+</head>
+<body>
+
+<div id="loginGate">
+  <div class="login-card">
+    <div class="brand-text"><b>Cockpit AGI Eléctrica</b><span style="display:block;color:var(--ink-muted);font-size:12px;margin-top:2px;">Control de Gestión · Trei</span></div>
+
+    <div id="stepEmail">
+      <h1>Ingresa con tu correo Trei</h1>
+      <p>Te enviamos un código de 6 dígitos a tu correo. Solo personas autorizadas pueden ver y cargar datos de este panel.</p>
+      <input id="emailInput" type="email" placeholder="nombre@trei.cl" autocomplete="email">
+      <button id="sendCodeBtn">Enviar código</button>
+      <div class="msg" id="emailMsg"></div>
+    </div>
+
+    <div id="stepCode" hidden>
+      <h1>Ingresa el código</h1>
+      <p>Revisa tu correo — te llegó un código de 6 dígitos.</p>
+      <input id="codeInput" type="text" inputmode="numeric" placeholder="123456" maxlength="6">
+      <button id="verifyCodeBtn">Ingresar</button>
+      <div class="msg" id="codeMsg"></div>
+      <span class="back-link" id="backToEmail">usar otro correo</span>
+    </div>
+  </div>
+</div>
+
+<div class="shell" id="app" hidden>
+
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor" style="color:var(--accent)"/></svg>
+      <div class="brand-text"><b>Cockpit AGI Eléctrica</b><span>Control de Gestión · Trei</span></div>
+    </div>
+    <div class="snapshot-tabs" id="snapshotTabs"></div>
+    <div class="who">
+      <span class="sync-dot" id="syncDot" title="Sincronizado"></span>
+      <span id="whoEmail"></span>
+      <button id="logoutBtn" type="button">Cerrar sesión</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="dock" id="dock">
+      <svg class="dock-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v12m0-12 4 4m-4-4-4 4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="dock-text">
+        <b>Suelta aquí los Excel de este mes</b>
+        <p>Panel Financiero, Cuentas por Cobrar y Horas Hombre — los que tengas. Se detecta el tipo de cada archivo automáticamente. El Excel se lee en tu navegador y solo se guarda el resumen ya calculado — visible para quienes tengan acceso a este panel.</p>
+      </div>
+      <button id="pickBtn" type="button">Elegir archivos</button>
+      <input id="fileInput" class="visually-hidden" type="file" multiple accept=".xlsx,.xls,.csv">
+    </div>
+
+    <div class="manifest" id="manifest"></div>
+    <div class="demo-banner" id="demoBanner" hidden>
+      <span>⚠</span><span><b>Estás viendo datos de ejemplo.</b> Sube arriba los Excel reales de AGI SPA para reemplazarlos.</span>
+    </div>
+
+    <section class="kpis" id="kpiRow"></section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Flujo de caja mensual</h2><span class="src" id="srcFlujo"></span></div>
+      <div class="chart-card">
+        <div class="legend">
+          <span><i style="background:var(--good)"></i>Ingresos</span>
+          <span><i style="background:var(--ink-faint)"></i>Egresos</span>
+          <span><i style="background:var(--accent)"></i>Flujo acumulado</span>
+        </div>
+        <svg id="flujoChart" width="100%" viewBox="0 0 1120 320" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Control de costos por proyecto</h2><span class="src" id="srcProyectos"></span></div>
+      <div class="proyectos-grid" id="proyectosGrid"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Cuentas por cobrar</h2><span class="src" id="srcCxc"></span></div>
+      <div id="cxcWrap"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Horas hombre</h2><span class="src" id="srcHh"></span></div>
+      <div class="hh-grid" id="hhGrid"></div>
+    </section>
+
+    <footer>
+      <span>El Excel se procesa en tu navegador; solo el resumen se guarda para que el panel se actualice para todos.</span>
+      <span id="lastUpdated"></span>
+    </footer>
+  </main>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ================= utilities ================= */
+  const $ = (id) => document.getElementById(id);
+  const MONTHS = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const strip = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g,"").trim().toLowerCase();
+
+  function num(v){
+    if (typeof v === "number") return v;
+    if (v == null || v === "" || v === "-" || v === "—") return 0;
+    let s = String(v).trim();
+    if (s === "" || s === "-") return 0;
+    const neg = /^\(.*\)$/.test(s);
+    s = s.replace(/[()]/g,"").replace(/[^0-9.,-]/g,"");
+    if (s.indexOf(",") > -1 && s.indexOf(".") > -1) {
+      if (s.lastIndexOf(",") > s.lastIndexOf(".")) s = s.replace(/\./g,"").replace(",", ".");
+      else s = s.replace(/,/g,"");
+    } else if (s.indexOf(",") > -1) {
+      s = s.replace(/\./g,"").replace(",", ".");
+    }
+    const n = parseFloat(s);
+    if (isNaN(n)) return 0;
+    return neg ? -n : n;
+  }
+  function fmtMoney(n, opts){
+    opts = opts || {};
+    const abs = Math.abs(n);
+    let s;
+    if (opts.compact && abs >= 1000000) s = (n/1000000).toLocaleString("es-CL",{maximumFractionDigits:1}) + "M";
+    else s = Math.round(n).toLocaleString("es-CL");
+    return (opts.prefix || "$") + s;
+  }
+  function fmtNum(n, dec){ return n.toLocaleString("es-CL",{minimumFractionDigits:dec||0, maximumFractionDigits:dec||0}); }
+  function pct(n){ return (n*100).toLocaleString("es-CL",{maximumFractionDigits:1}) + "%"; }
+  function el(tag, attrs, children){
+    const e = document.createElement(tag);
+    if (attrs) for (const k in attrs){
+      if (k === "class") e.className = attrs[k];
+      else if (k === "html") e.innerHTML = attrs[k];
+      else if (k === "text") e.textContent = attrs[k];
+      else e.setAttribute(k, attrs[k]);
+    }
+    (children||[]).forEach(c => c && e.appendChild(c));
+    return e;
+  }
+  function aoa(ws){ return XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:""}); }
+  function firstNonEmpty(row){ for (let i=0;i<row.length;i++) if (String(row[i]).trim() !== "") return {i, v: row[i]}; return null; }
+
+  const tooltip = $("tooltip");
+  function showTip(x,y,html){ tooltip.innerHTML = html; tooltip.style.left = x+"px"; tooltip.style.top = y+"px"; tooltip.style.opacity = 1; }
+  function hideTip(){ tooltip.style.opacity = 0; }
+
+  const PROJECT_COLORS = { "raices":"var(--proj-raices)","peñablanca":"var(--proj-raices)","condell":"var(--proj-condell)","tsm":"var(--proj-tsm)","santa maria":"var(--proj-tsm)","terraza":"var(--proj-tsm)","cdp4":"var(--proj-cdp4)","pinar":"var(--proj-cdp4)" };
+  function colorForProject(name){
+    const k = strip(name);
+    for (const key in PROJECT_COLORS) if (k.indexOf(key) > -1) return PROJECT_COLORS[key];
+    return "var(--proj-other)";
+  }
+
+  /* ================= state ================= */
+  const state = {
+    snapshots: [],        // parsed "Panel Financiero" workbooks, one per month file
+    activeSnapshot: null, // index
+    cxc: null, cxcIsDemo: true,
+    hh: null, hhIsDemo: true,
+    manifest: []           // {name, type, note}
+  };
+
+  /* ================= classification ================= */
+  function classifyWorkbook(wb){
+    const sheetNames = wb.SheetNames.map(strip);
+    if (sheetNames.some(n => n === "resumen general") || sheetNames.some(n => /^(cc|ig|ing)-/.test(n))) return "panel";
+    const first = wb.Sheets[wb.SheetNames[0]];
+    const text = strip(XLSX.utils.sheet_to_csv(first, {blankrows:false}).slice(0,4000));
+    if (text.indexOf("informe estado de cuenta") > -1 || (text.indexOf("codigo:") > -1 && text.indexOf("nombre:") > -1)) return "cxc";
+    if (sheetNames.some(n => n === "registro")) return "hh";
+    for (const sn of wb.SheetNames){
+      const rows = aoa(wb.Sheets[sn]).slice(0,15);
+      for (const row of rows){
+        const cells = row.map(strip);
+        const hasProj = cells.some(c => c.indexOf("proyecto") > -1);
+        const hasHoras = cells.some(c => c.indexOf("horas") > -1 || c === "hh");
+        const hasPersona = cells.some(c => c.indexOf("persona") > -1);
+        if ((hasProj && hasHoras) || (hasPersona && hasHoras)) return "hh";
+      }
+    }
+    return "unknown";
+  }
+
+  /* ================= parse: Panel Financiero (Resumen General + CC-* + IG-*) ================= */
+  function parseResumenGeneral(ws){
+    const rows = aoa(ws);
+    let monthCols = null, totalCol = null, headerRowIdx = -1;
+    for (let r=0;r<rows.length;r++){
+      const cells = rows[r].map(strip);
+      let found = 0; const cols = {};
+      MONTHS.forEach((m,mi) => { const idx = cells.indexOf(m); if (idx > -1){ cols[mi]=idx; found++; } });
+      if (found >= 8){ monthCols = cols; headerRowIdx = r; const tIdx = cells.findIndex(c=>c.indexOf("total")>-1); if (tIdx>-1) totalCol = tIdx; break; }
+    }
+    if (!monthCols) return null;
+    const lines = [];
+    for (let r=headerRowIdx+1;r<rows.length;r++){
+      const row = rows[r];
+      const fne = firstNonEmpty(row);
+      if (!fne) continue;
+      const label = String(fne.v).trim();
+      if (!label) continue;
+      const values = MONTHS.map((m,mi) => monthCols[mi] != null ? num(row[monthCols[mi]]) : 0);
+      const total = totalCol != null ? num(row[totalCol]) : values.reduce((a,b)=>a+b,0);
+      lines.push({label, raw: label.toUpperCase(), values, total, indent: (String(row[0]||"").match(/^\s*/)||[""])[0].length});
+    }
+    const findLine = (name) => lines.find(l => l.raw === name);
+    return {
+      lines,
+      totalIngresos: findLine("TOTAL INGRESOS"),
+      totalEgresos: findLine("TOTAL EGRESOS"),
+      flujoCaja: findLine("FLUJO DE CAJA"),
+      flujoAcumulado: findLine("FLUJO DE CAJA ACUMULADO")
+    };
+  }
+
+  function parseCCSheet(ws){
+    const rows = aoa(ws);
+    const keys = { presupuesto:/presupuesto/, proyeccion:/proyecci/, resultado:/^resultado$/, utilidad:/utilidad/ };
+    let headerRow = -1; const colMap = {};
+    for (let r=0;r<Math.min(rows.length,6);r++){
+      const cells = rows[r].map(strip);
+      let hits = 0;
+      cells.forEach((c,ci) => { for (const k in keys){ if (keys[k].test(c) && colMap[k]==null){ colMap[k]=ci; hits++; } } });
+      if (hits >= 3){ headerRow = r; break; }
+    }
+    if (headerRow === -1) return null;
+    const totals = {presupuesto:0, proyeccion:0, resultado:0, utilidad:0};
+    for (let r=headerRow+1; r<Math.min(headerRow+6, rows.length); r++){
+      const row = rows[r];
+      const label = String(row[0]||"").trim();
+      if (!label) break;
+      totals.presupuesto += num(row[colMap.presupuesto]);
+      totals.proyeccion += num(row[colMap.proyeccion]);
+      totals.resultado += num(row[colMap.resultado]);
+      totals.utilidad += num(row[colMap.utilidad]);
+    }
+    return totals;
+  }
+
+  function parseIGTotal(ws){
+    const rows = aoa(ws);
+    for (let r=0;r<Math.min(rows.length,8);r++){
+      const cells = rows[r];
+      const labelIdx = cells.findIndex(c => strip(c) === "total");
+      if (labelIdx > -1){
+        for (let c=labelIdx+1;c<cells.length;c++){ const n = num(cells[c]); if (n) return n; }
+      }
+    }
+    return null;
+  }
+
+  function niceProjectName(sheetSuffix){
+    const map = {raices:"Raíces de Peñablanca", condell:"Condell", tsm:"Terraza Santa María", cdp4:"Cumbres del Pinar 4"};
+    return map[strip(sheetSuffix)] || sheetSuffix;
+  }
+
+  function detectMonthLabel(fileName, resumen){
+    const m = fileName.match(/(\d{4})[-_ ]?(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)/i);
+    const monthNames = {ene:"Enero",feb:"Febrero",mar:"Marzo",abr:"Abril",may:"Mayo",jun:"Junio",jul:"Julio",ago:"Agosto",sep:"Septiembre",oct:"Octubre",nov:"Noviembre",dic:"Diciembre"};
+    if (m) return monthNames[strip(m[2])] + " " + m[1];
+    return fileName.replace(/\.(xlsx|xls|csv)$/i,"");
+  }
+
+  function parsePanelWorkbook(wb, fileName){
+    let resumen = null;
+    for (const name of wb.SheetNames) if (strip(name) === "resumen general") resumen = parseResumenGeneral(wb.Sheets[name]);
+    const proyectos = [];
+    wb.SheetNames.forEach(name => {
+      const m = name.match(/^CC-(.+)$/i);
+      if (m){
+        const cc = parseCCSheet(wb.Sheets[name]);
+        if (cc){
+          const igName = wb.SheetNames.find(n => strip(n) === strip("IG-" + m[1]));
+          const gastoIG = igName ? parseIGTotal(wb.Sheets[igName]) : null;
+          proyectos.push(Object.assign({ name: niceProjectName(m[1]), sheet: name, gastoIG }, cc));
+        }
+      }
+    });
+    return { fileName, label: detectMonthLabel(fileName, resumen), resumen, proyectos, sheetCount: wb.SheetNames.length };
+  }
+
+  /* ================= parse: Cuentas por Cobrar ================= */
+  function parseCxC(wb){
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = aoa(ws);
+    const clients = [];
+    let current = null;
+    let grandTotal = null;
+    for (let r=0;r<rows.length;r++){
+      const row = rows[r];
+      const c0 = strip(row[0]);
+      if (c0.indexOf("codigo") === 0 || c0 === "codigo:"){
+        const nameIdx = row.findIndex(c => strip(c).indexOf("nombre") === 0);
+        const codeVal = row[row.findIndex(c=>strip(c).indexOf("codigo")===0)+1];
+        const nameVal = nameIdx > -1 ? row[nameIdx+1] : null;
+        current = { code: String(codeVal||"").trim(), name: String(nameVal||"").trim(), debe:0, haber:0, saldo:0, docs:0 };
+        continue;
+      }
+      if (current && c0 === "total"){
+        const rest = row.slice(1).map(v=>String(v).trim()).filter(Boolean);
+        if (rest[0] && strip(rest[0]) === strip(current.name)){
+          const nonZero = row.map((v,i)=>({v:num(v),i})).filter(x=>x.i>0 && x.v!==0);
+          if (nonZero.length){
+            current.saldo = nonZero[nonZero.length-1].v;
+            current.debe = nonZero[0].v;
+          }
+          clients.push(current);
+          current = null;
+        }
+      }
+      if (row.some(c => strip(c) === "total:")){
+        const numericTail = row.map(num).filter(n => n !== 0);
+        if (numericTail.length) grandTotal = numericTail[numericTail.length-1];
+      }
+    }
+    clients.sort((a,b)=> b.saldo - a.saldo);
+    return { clients, grandTotal: grandTotal != null ? grandTotal : clients.reduce((a,c)=>a+c.saldo,0) };
+  }
+
+  /* ================= parse: Horas Hombre ================= */
+  // Fuente real confirmada (desde el .pbix): Alex mantiene "Control_HH_Proyectos.Rev2.xlsx"
+  // en su equipo, con hojas "Registro" (un registro por actividad: fecha, proyecto, persona,
+  // HH trabajadas) y "Proyectos" (catálogo con HH presupuestadas). El Power BI solo la lee
+  // y la resume — así que si nos comparten ese mismo Excel mensualmente, no hace falta
+  // pasar por Power BI en absoluto. Mapeo persona→área tomado tal cual del propio Power Query
+  // de Alex (Table.AddColumn "Personalizado" en la consulta Registro_HH); un nombre nuevo que
+  // no esté aquí cae en "Sin área" en vez de romper el parseo.
+  const PERSON_AREA = {
+    "martin rodrigues":"Terreno", "gonzalo armijo":"Terreno",
+    "daniel mesa":"Ingenieria", "alex balboa":"Gerencia"
+  };
+  function excelSerialToDate(v){
+    if (v instanceof Date) return isNaN(v) ? null : v;
+    if (typeof v === "string"){
+      const s = v.trim();
+      let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (m){ const d = new Date(+m[1], +m[2]-1, +m[3]); return isNaN(d) ? null : d; }
+      m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
+      if (m){ const d = new Date(+m[3], +m[2]-1, +m[1]); return isNaN(d) ? null : d; } // dd-mm-aaaa (formato chileno)
+    }
+    const n = Number(v);
+    if (!isFinite(n) || n <= 0) return null;
+    const utcDays = Math.floor(n - 25569);
+    const d = new Date(utcDays * 86400 * 1000);
+    return isNaN(d) ? null : d;
+  }
+  function classifyClienteArea(v){
+    const c = strip(v);
+    if (!c) return "Sin categoría";
+    if (c === "trei") return "Cliente_Interno";
+    if (c.indexOf("area interna") > -1) return "Oficina_Central";
+    return "Cliente_Externo";
+  }
+  function findSheetByNameOrSignature(wb, exactName, signatureFn){
+    for (const n of wb.SheetNames){ if (strip(n) === exactName) return wb.Sheets[n]; }
+    for (const n of wb.SheetNames){
+      const rows = aoa(wb.Sheets[n]).slice(0,8);
+      if (rows.some(row => signatureFn(row.map(strip)))) return wb.Sheets[n];
+    }
+    return null;
+  }
+  function parseProyectosCatalogo(ws){
+    if (!ws) return null;
+    const rows = aoa(ws);
+    let headerRow = -1; const col = {};
+    for (let r=0;r<Math.min(rows.length,8);r++){
+      const cells = rows[r].map(strip);
+      const codIdx = cells.findIndex(c => c.indexOf("codigo") > -1);
+      const nomIdx = cells.findIndex(c => c.indexOf("nombre") > -1 && c.indexOf("proyecto") > -1);
+      const cliIdx = cells.findIndex(c => c.indexOf("cliente") > -1);
+      if (codIdx > -1 && nomIdx > -1 && cliIdx > -1){
+        headerRow = r; col.codigo = codIdx; col.nombre = nomIdx; col.cliente = cliIdx;
+        col.presup = cells.findIndex(c => c.indexOf("presupuestad") > -1);
+        col.consumido = cells.findIndex(c => c.indexOf("consumid") > -1);
+        break;
+      }
+    }
+    if (headerRow === -1) return null;
+    const byNombre = {}, byCodigo = {};
+    for (let r=headerRow+1;r<rows.length;r++){
+      const row = rows[r];
+      const nombre = String(row[col.nombre]||"").trim();
+      const codigo = String(row[col.codigo]||"").trim();
+      if (!nombre && !codigo) continue;
+      const entry = {
+        categoria: classifyClienteArea(row[col.cliente]),
+        presupuesto: col.presup > -1 ? num(row[col.presup]) : null,
+        consumido: col.consumido > -1 ? num(row[col.consumido]) : null
+      };
+      if (nombre) byNombre[strip(nombre)] = entry;
+      if (codigo) byCodigo[strip(codigo)] = entry;
+    }
+    return { byNombre, byCodigo };
+  }
+  // Formato rico: hoja "Registro" (una fila por actividad) + hoja "Proyectos" opcional.
+  function parseHHRegistro(wb){
+    const ws = findSheetByNameOrSignature(wb, "registro", cells =>
+      cells.some(c=>c.indexOf("persona")>-1) && cells.some(c=>c.indexOf("horas trabajadas")>-1 || c.indexOf("hh trabajadas")>-1));
+    if (!ws) return null;
+    const rows = aoa(ws);
+    let headerRow = -1; const col = {};
+    for (let r=0;r<Math.min(rows.length,8);r++){
+      const cells = rows[r].map(strip);
+      const personaIdx = cells.findIndex(c => c.indexOf("persona") > -1);
+      const horasIdx = cells.findIndex(c => c.indexOf("horas trabajadas") > -1 || c.indexOf("hh trabajadas") > -1 || c === "hh");
+      if (personaIdx > -1 && horasIdx > -1){
+        headerRow = r; col.persona = personaIdx; col.horas = horasIdx;
+        col.fecha = cells.findIndex(c => c.indexOf("fecha") > -1);
+        col.nombreProy = cells.findIndex(c => c.indexOf("nombre") > -1 && c.indexOf("proyecto") > -1);
+        col.codigoProy = cells.findIndex(c => c.indexOf("codigo") > -1 && c.indexOf("proyecto") > -1);
+        break;
+      }
+    }
+    if (headerRow === -1) return null;
+    const proyectosSheet = findSheetByNameOrSignature(wb, "proyectos", cells =>
+      cells.some(c=>c.indexOf("codigo")>-1) && cells.some(c=>c.indexOf("cliente")>-1) && cells.some(c=>c.indexOf("nombre")>-1 && c.indexOf("proyecto")>-1));
+    const catalogo = parseProyectosCatalogo(proyectosSheet);
+
+    const byProyecto={}, byPersona={}, byArea={}, byCategoria={}, byMes={};
+    let total = 0, minDate = null, maxDate = null;
+    for (let r=headerRow+1;r<rows.length;r++){
+      const row = rows[r];
+      const persona = String(row[col.persona]||"").trim();
+      const h = num(row[col.horas]);
+      if (!persona || !h) continue;
+      const proyNombre = col.nombreProy > -1 ? String(row[col.nombreProy]||"").trim() : "";
+      const proyCodigo = col.codigoProy > -1 ? String(row[col.codigoProy]||"").trim() : "";
+      const proyDisplay = proyNombre || proyCodigo || "Sin proyecto";
+      byProyecto[proyDisplay] = (byProyecto[proyDisplay]||0) + h;
+      byPersona[persona] = (byPersona[persona]||0) + h;
+      total += h;
+      const area = PERSON_AREA[strip(persona)] || "Sin área";
+      byArea[area] = (byArea[area]||0) + h;
+      let categoria = "Sin categoría";
+      if (catalogo){
+        const entry = (proyNombre && catalogo.byNombre[strip(proyNombre)]) || (proyCodigo && catalogo.byCodigo[strip(proyCodigo)]);
+        if (entry) categoria = entry.categoria;
+      }
+      byCategoria[categoria] = (byCategoria[categoria]||0) + h;
+      if (col.fecha > -1){
+        const d = excelSerialToDate(row[col.fecha]);
+        if (d){
+          if (!minDate || d < minDate) minDate = d;
+          if (!maxDate || d > maxDate) maxDate = d;
+          const key = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
+          if (!byMes[key]) byMes[key] = { label: MONTH_LABELS[d.getMonth()] + " " + d.getFullYear(), value: 0, order: d.getFullYear()*12 + d.getMonth() };
+          byMes[key].value += h;
+        }
+      }
+    }
+    if (!total) return null;
+    const toSorted = (obj) => Object.entries(obj).sort((a,b)=>b[1]-a[1]);
+    const porMes = Object.values(byMes).sort((a,b)=>a.order-b.order).map(m => [m.label, Math.round(m.value*10)/10]);
+    let ejecucion = null;
+    if (catalogo){
+      const list = [];
+      Object.keys(byProyecto).forEach(name => {
+        const entry = catalogo.byNombre[strip(name)];
+        if (entry && entry.presupuesto) list.push({name, presupuesto: entry.presupuesto, consumido: byProyecto[name]});
+      });
+      if (list.length){ list.sort((a,b) => (b.consumido/b.presupuesto) - (a.consumido/a.presupuesto)); ejecucion = list; }
+    }
+    let periodo = null;
+    if (minDate && maxDate){
+      const a = MONTH_LABELS[minDate.getMonth()] + " " + minDate.getFullYear();
+      const b = MONTH_LABELS[maxDate.getMonth()] + " " + maxDate.getFullYear();
+      periodo = a === b ? a : (a + " – " + b);
+    }
+    return {
+      total, isReal:true, periodo,
+      porProyecto: toSorted(byProyecto), porPersona: toSorted(byPersona),
+      porArea: toSorted(byArea), porCategoria: toSorted(byCategoria), porMes, ejecucion
+    };
+  }
+  // Formato de respaldo: cualquier tabla plana con columnas Proyecto + Horas (por si en el
+  // futuro alguien exporta un resumen ya agregado, sin el detalle de Registro).
+  function parseHHFlat(wb){
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = aoa(ws);
+    let headerRow = -1; const col = {};
+    for (let r=0;r<Math.min(rows.length,10);r++){
+      const cells = rows[r].map(strip);
+      const pIdx = cells.findIndex(c => c.indexOf("proyecto") > -1);
+      const hIdx = cells.findIndex(c => c.indexOf("horas") > -1 || c === "hh");
+      if (pIdx > -1 && hIdx > -1){
+        headerRow = r; col.proyecto = pIdx; col.horas = hIdx;
+        col.area = cells.findIndex(c => c.indexOf("area") > -1 || c.indexOf("departamento") > -1);
+        col.categoria = cells.findIndex(c => c.indexOf("categoria") > -1 || c.indexOf("tipo cliente") > -1);
+        break;
+      }
+    }
+    if (headerRow === -1) return null;
+    const byProyecto = {}, byArea = {}, byCategoria = {};
+    let total = 0;
+    for (let r=headerRow+1;r<rows.length;r++){
+      const row = rows[r];
+      const proy = String(row[col.proyecto]||"").trim();
+      const h = num(row[col.horas]);
+      if (!proy || !h) continue;
+      byProyecto[proy] = (byProyecto[proy]||0) + h;
+      total += h;
+      if (col.area > -1){ const a = String(row[col.area]||"").trim() || "Sin área"; byArea[a] = (byArea[a]||0) + h; }
+      if (col.categoria > -1){ const c = String(row[col.categoria]||"").trim() || "Sin categoría"; byCategoria[c] = (byCategoria[c]||0) + h; }
+    }
+    if (!total) return null;
+    const toSorted = (obj) => Object.entries(obj).sort((a,b)=>b[1]-a[1]);
+    return { total, isReal:true, periodo:null, porProyecto: toSorted(byProyecto), porPersona:[], porArea: toSorted(byArea), porCategoria: toSorted(byCategoria), porMes:[], ejecucion:null };
+  }
+  function parseHH(wb){
+    return parseHHRegistro(wb) || parseHHFlat(wb);
+  }
+
+  /* ================= demo data (clearly marked) ================= */
+  function demoSnapshot(){
+    const months = MONTH_LABELS;
+    const ing = [1373767,0,0,8399638,15504331,5048932,18057255,24153882,155435098,10994431,104920034,8831284];
+    const egr = [5722328,5722328,6159677,9639261,9639261,10999132,11379258,50618077,94522983,20780225,89376278,20780225];
+    let acc = 0; const flujo = ing.map((v,i)=>v-egr[i]);
+    const flujoAcc = flujo.map(v => acc += v);
+    return {
+      fileName: "ejemplo.xlsx", label: "Ejemplo — Agosto 2026", isDemo:true,
+      resumen: {
+        totalIngresos:{label:"TOTAL INGRESOS", values:ing, total:ing.reduce((a,b)=>a+b,0)},
+        totalEgresos:{label:"TOTAL EGRESOS", values:egr, total:egr.reduce((a,b)=>a+b,0)},
+        flujoCaja:{label:"FLUJO DE CAJA", values:flujo, total:flujo.reduce((a,b)=>a+b,0)},
+        flujoAcumulado:{label:"FLUJO DE CAJA ACUMULADO", values:flujoAcc, total:flujoAcc[11]}
+      },
+      proyectos: [
+        {name:"Raíces de Peñablanca", presupuesto:1008656185, proyeccion:993656185, resultado:15000000, utilidad:15000000, gastoIG:735000000},
+        {name:"Condell", presupuesto:301146274, proyeccion:268825587, resultado:32320687, utilidad:32320687, gastoIG:255000000},
+        {name:"Terraza Santa María", presupuesto:58991688, proyeccion:51681164, resultado:7310523, utilidad:7310523, gastoIG:49500000},
+        {name:"Cumbres del Pinar 4", presupuesto:155749454, proyeccion:121728795, resultado:34020659, utilidad:34020659, gastoIG:131000000}
+      ]
+    };
+  }
+  function demoCxC(){
+    return { clients:[
+      {code:"76100769", name:"OBRAS CIVILES SANTA MARIA SPA", saldo:6474762},
+      {code:"77937241", name:"INGENIERIA EL PEUMO LIMITADA", saldo:4538805},
+      {code:"77564053", name:"PARQUE CALAFQUÉN SPA", saldo:472777}
+    ].sort((a,b)=>b.saldo-a.saldo), grandTotal: 11486344, isDemo:true };
+  }
+  function demoHH(){
+    return {
+      total:648.5, isDemo:true, periodo:"Agosto 2026",
+      porProyecto:[["Terraza Santa Maria",278],["GESTION Y VENTA",79.5],["Casas del Pinar 4",67.5],["Chalinga",60.5],["Mirador Santa Teresita",38],["Condell",26]],
+      porPersona:[["Martin Rodrigues",162.5],["Gonzalo Armijo",162.5],["Alex Balboa",162.5],["Daniel Mesa",161]],
+      porArea:[["Terreno",325],["Gerencia",162.5],["Ingenieria",161]],
+      porCategoria:[["Cliente_Interno",438.5],["Cliente_Externo",148.5],["Oficina_Central",61.5]],
+      porMes:[["Jun 2026",608],["Jul 2026",693],["Ago 2026",648.5]],
+      ejecucion:[
+        {name:"Condell", presupuesto:270, consumido:444},
+        {name:"GESTION Y VENTA", presupuesto:120, consumido:127.5},
+        {name:"Cromático", presupuesto:270, consumido:291},
+        {name:"Casas del Pinar 4", presupuesto:90, consumido:115.5},
+        {name:"Chalinga", presupuesto:180, consumido:70.5},
+        {name:"Raíces de Peñablanca", presupuesto:180, consumido:49}
+      ]
+    };
+  }
+
+  /* ================= rendering ================= */
+  function activeSnap(){ return state.snapshots[state.activeSnapshot] || demoSnapshot(); }
+
+  function fmtWhen(iso){
+    if (!iso) return "";
+    try{ return new Date(iso).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}); } catch(e){ return ""; }
+  }
+  function attrib(obj){
+    if (!obj || !obj._uploadedBy) return "";
+    return " · subido por " + obj._uploadedBy + " · " + fmtWhen(obj._uploadedAt);
+  }
+
+  function render(){
+    renderManifest();
+    renderTabs();
+    const snap = activeSnap();
+    const cxc = state.cxc || demoCxC();
+    const hh = state.hh || demoHH();
+    $("demoBanner").hidden = state.snapshots.length > 0;
+    renderKPIs(snap, cxc, hh);
+    renderFlujo(snap);
+    renderProyectos(snap);
+    renderCxC(cxc);
+    renderHH(hh);
+    $("srcFlujo").textContent = "hoja: Resumen General — " + (snap.fileName || "") + attrib(snap);
+    $("srcProyectos").textContent = "hojas: CC-* / IG-* — " + (snap.fileName || "") + attrib(snap);
+    $("srcCxc").textContent = (cxc.isDemo ? "ejemplo" : (cxc.fileName || "AGI_Clientes")) + attrib(cxc);
+    $("srcHh").textContent = (hh.isDemo ? "ejemplo" : "archivo cargado") + attrib(hh);
+    $("lastUpdated").textContent = "Vista: " + (snap.label || "") + " · " + new Date().toLocaleString("es-CL");
+  }
+
+  function renderTabs(){
+    const wrap = $("snapshotTabs"); wrap.innerHTML = "";
+    if (state.snapshots.length <= 1) return;
+    state.snapshots.forEach((s,i) => {
+      const tab = el("button", {class:"snap-tab" + (i===state.activeSnapshot?" active":"") , text:s.label});
+      tab.addEventListener("click", () => { state.activeSnapshot = i; render(); });
+      wrap.appendChild(tab);
+    });
+  }
+
+  function renderManifest(){
+    const wrap = $("manifest"); wrap.innerHTML = "";
+    state.manifest.forEach((m,i) => {
+      const row = el("div", {class:"manifest-row"}, [
+        el("span", {class:"fname", text:m.name}),
+        el("span", {class:"tag " + m.type, text: m.type === "panel" ? "Panel Financiero" : m.type === "cxc" ? "Cuentas por Cobrar" : m.type === "hh" ? "Horas Hombre" : "Sin identificar"}),
+        el("button", {class:"rm", text:"✕", title:"Quitar"})
+      ]);
+      row.querySelector(".rm").addEventListener("click", () => removeManifest(i));
+      wrap.appendChild(row);
+    });
+  }
+
+  function removeManifest(i){
+    const m = state.manifest[i];
+    if (m.type === "panel") state.snapshots = state.snapshots.filter(s => s.fileName !== m.name);
+    if (m.type === "cxc") { state.cxc = null; }
+    if (m.type === "hh") { state.hh = null; }
+    state.manifest.splice(i,1);
+    state.activeSnapshot = Math.max(0, state.snapshots.length - 1);
+    render();
+  }
+
+  function kpiCard(label, value, sub, pillText, pillClass){
+    return el("div", {class:"kpi"}, [
+      pillText ? el("span", {class:"pill " + pillClass, text:pillText}) : null,
+      el("div", {class:"label", text:label}),
+      el("div", {class:"value", text:value}),
+      sub ? el("div", {class:"sub", text:sub}) : null
+    ]);
+  }
+
+  function renderKPIs(snap, cxc, hh){
+    const row = $("kpiRow"); row.innerHTML = "";
+    const ing = snap.resumen && snap.resumen.totalIngresos ? snap.resumen.totalIngresos.total : snap.proyectos.reduce((a,p)=>a+(p.presupuesto||0),0)*0;
+    const egr = snap.resumen && snap.resumen.totalEgresos ? snap.resumen.totalEgresos.total : 0;
+    const flujo = ing - egr;
+    row.appendChild(kpiCard("Ingresos (año a la fecha)", fmtMoney(ing,{compact:true}), "según Resumen General, en pesos"));
+    row.appendChild(kpiCard("Egresos (año a la fecha)", fmtMoney(egr,{compact:true}), "según Resumen General, en pesos"));
+    row.appendChild(kpiCard("Flujo neto", fmtMoney(flujo,{compact:true}), flujo>=0?"superávit acumulado":"déficit acumulado", flujo>=0?"Bien":"Alerta", flujo>=0?"good":"critical"));
+    const totalPresup = snap.proyectos.reduce((a,p)=>a+(p.presupuesto||0),0);
+    const totalGasto = snap.proyectos.reduce((a,p)=>a+(p.gastoIG||0),0);
+    const ratio = totalPresup ? totalGasto/totalPresup : 0;
+    row.appendChild(kpiCard("Ejecución presupuestaria", pct(ratio), fmtMoney(totalGasto,{compact:true})+" de "+fmtMoney(totalPresup,{compact:true}), ratio>1?"Sobre":ratio>0.85?"Ajustado":"OK", ratio>1?"critical":ratio>0.85?"warning":"good"));
+    row.appendChild(kpiCard("Cuentas por cobrar", fmtMoney(cxc.grandTotal,{compact:true}), cxc.clients.length + " clientes con saldo"));
+    row.appendChild(kpiCard("Horas hombre" + (hh.periodo ? " · " + hh.periodo : ""), fmtNum(hh.total,1) + " h", hh.porProyecto.length + " proyectos con registro"));
+  }
+
+  function renderFlujo(snap){
+    const svg = $("flujoChart");
+    svg.innerHTML = "";
+    if (!snap.resumen || !snap.resumen.totalIngresos){
+      svg.parentElement.innerHTML = "";
+      svg.parentElement.appendChild(el("div", {class:"empty-note", text:"No encontré la hoja 'Resumen General' en este archivo. Revisa que tenga el mismo formato del libro AGI SPA."}));
+      return;
+    }
+    const ing = snap.resumen.totalIngresos.values, egr = snap.resumen.totalEgresos.values;
+    const flujoAcc = snap.resumen.flujoAcumulado ? snap.resumen.flujoAcumulado.values : (() => { let a=0; return ing.map((v,i)=>a+=(v-egr[i])); })();
+    const W = 1120, H = 320, padL = 56, padR = 16, padT = 16, padB = 34;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const maxBar = Math.max(1, ...ing, ...egr);
+    const minAcc = Math.min(0, ...flujoAcc), maxAcc = Math.max(1, ...flujoAcc);
+    const n = 12, gw = plotW / n;
+    const yBar = (v) => padT + plotH - (v/maxBar)*plotH*0.62;
+    const yLine = (v) => padT + plotH - ((v-minAcc)/(maxAcc-minAcc || 1))*plotH;
+
+    let svgHtml = "";
+    // gridlines
+    for (let g=0; g<=4; g++){ const y = padT + plotH*g/4; svgHtml += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="var(--line)" stroke-width="1"/>`; }
+    MONTH_LABELS.forEach((mLabel,i) => {
+      const x0 = padL + i*gw;
+      const bw = gw*0.30;
+      const hI = plotH*0.62*(ing[i]/maxBar), hE = plotH*0.62*(egr[i]/maxBar);
+      const xI = x0 + gw*0.16, xE = x0 + gw*0.54;
+      svgHtml += `<rect data-t="ing-${i}" x="${xI}" y="${padT+plotH-hI}" width="${bw}" height="${Math.max(hI,0.5)}" rx="2.5" fill="var(--good)"/>`;
+      svgHtml += `<rect data-t="egr-${i}" x="${xE}" y="${padT+plotH-hE}" width="${bw}" height="${Math.max(hE,0.5)}" rx="2.5" fill="var(--ink-faint)"/>`;
+      svgHtml += `<text x="${x0+gw/2}" y="${H-10}" text-anchor="middle" font-size="11" fill="var(--ink-faint)" font-family="IBM Plex Mono">${mLabel}</text>`;
+    });
+    // acumulado line
+    const pts = flujoAcc.map((v,i) => [padL + i*gw + gw/2, yLine(v)]);
+    const pathD = pts.map((p,i) => (i===0?"M":"L") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    svgHtml += `<path d="${pathD}" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    pts.forEach((p,i) => { svgHtml += `<circle data-t="acc-${i}" cx="${p[0]}" cy="${p[1]}" r="3.4" fill="var(--accent)" stroke="var(--surface)" stroke-width="1.4"/>`; });
+
+    svg.innerHTML = svgHtml;
+    svg.querySelectorAll("[data-t]").forEach(node => {
+      node.addEventListener("mousemove", (e) => {
+        const [kind,i] = node.getAttribute("data-t").split("-"); const idx = +i;
+        const html = `<b>${MONTH_LABELS[idx]}</b><br>Ingresos: ${fmtMoney(ing[idx])}<br>Egresos: ${fmtMoney(egr[idx])}<br>Flujo acum.: ${fmtMoney(flujoAcc[idx])}`;
+        showTip(e.clientX, e.clientY, html);
+      });
+      node.addEventListener("mouseleave", hideTip);
+    });
+  }
+
+  function renderProyectos(snap){
+    const grid = $("proyectosGrid"); grid.innerHTML = "";
+    if (!snap.proyectos.length){ grid.appendChild(el("div", {class:"empty-note", text:"No encontré hojas de control de costo (CC-*) en este archivo."})); return; }
+    snap.proyectos.forEach(p => {
+      const ratio = p.gastoIG != null && p.presupuesto ? p.gastoIG/p.presupuesto : null;
+      const status = ratio == null ? null : ratio > 1 ? "critical" : ratio > 0.85 ? "warning" : "good";
+      const color = colorForProject(p.name);
+      const card = el("div", {class:"proy-card"}, [
+        el("div", {class:"proy-head"}, [ el("span",{class:"proy-dot"}), el("h3",{text:p.name}) ]),
+        el("div", {class:"proy-row"}, [ el("span",{text:"Presupuesto"}), el("b",{text:fmtMoney(p.presupuesto,{compact:true})}) ]),
+        el("div", {class:"proy-row"}, [ el("span",{text:"Proyección"}), el("b",{text:fmtMoney(p.proyeccion,{compact:true})}) ]),
+        el("div", {class:"proy-row"}, [ el("span",{text:"Resultado"}), el("b",{text:fmtMoney(p.resultado,{compact:true})}) ]),
+      ]);
+      card.querySelector(".proy-dot").style.background = color;
+      if (ratio != null){
+        const track = el("div", {class:"bar-track"}, [ el("div", {class:"bar-fill"}) ]);
+        const fill = track.querySelector(".bar-fill");
+        fill.style.width = Math.min(ratio,1)*100 + "%";
+        fill.style.background = status === "critical" ? "var(--critical)" : status === "warning" ? "var(--warning)" : "var(--good)";
+        card.appendChild(track);
+        card.appendChild(el("div", {class:"bar-label"}, [ el("span",{text:"Ejecutado " + pct(ratio) + " (Of. Central)"}), el("span",{text: ratio>1 ? "sobre presupuesto" : ""}) ]));
+      }
+      grid.appendChild(card);
+    });
+  }
+
+  function renderCxC(cxc){
+    const wrap = $("cxcWrap"); wrap.innerHTML = "";
+    if (!cxc.clients.length){ wrap.appendChild(el("div",{class:"empty-note", text:"Sube el Excel de Cuentas por Cobrar para ver esta sección."})); return; }
+    const table = el("div", {class:"table-wrap"});
+    let rows = "";
+    cxc.clients.forEach(c => { rows += `<tr><td>${c.name}</td><td class="num">${c.code||""}</td><td class="num">${fmtMoney(c.saldo)}</td></tr>`; });
+    table.innerHTML = `<table><thead><tr><th>Cliente</th><th>Código</th><th>Saldo</th></tr></thead><tbody>${rows}
+      <tr class="total-row"><td>Total</td><td></td><td class="num">${fmtMoney(cxc.grandTotal)}</td></tr></tbody></table>`;
+    wrap.appendChild(table);
+  }
+
+  function hhBars(items, total, wrap){
+    items.slice(0,7).forEach(([name,val]) => {
+      const item = el("div", {class:"hh-item"}, [
+        el("span", {class:"hh-name", text:name, title:name}),
+        el("span", {class:"hh-track"}, [ el("span", {class:"hh-fill"}) ]),
+        el("span", {class:"hh-val", text:fmtNum(val,1)})
+      ]);
+      item.querySelector(".hh-fill").style.width = (total ? val/total*100 : 0) + "%";
+      wrap.appendChild(item);
+    });
+  }
+
+  function renderHH(hh){
+    const grid = $("hhGrid"); grid.innerHTML = "";
+    if (!hh.porProyecto.length){ grid.appendChild(el("div",{class:"empty-note", text:"Sube el Excel de Horas Hombre (hoja \"Registro\", con columnas Persona, Proyecto y HH Trabajadas) para ver esta sección."})); return; }
+    const maxP = Math.max(...hh.porProyecto.map(x=>x[1]));
+    const c1 = el("div", {class:"hh-card"}, [ el("h3",{text:"Por proyecto"}) ]); hhBars(hh.porProyecto, maxP, c1);
+    grid.appendChild(c1);
+    if (hh.porPersona && hh.porPersona.length){ const maxPe = Math.max(...hh.porPersona.map(x=>x[1])); const c2 = el("div",{class:"hh-card"},[el("h3",{text:"Por persona"})]); hhBars(hh.porPersona, maxPe, c2); grid.appendChild(c2); }
+    if (hh.porArea.length){ const maxA = Math.max(...hh.porArea.map(x=>x[1])); const c3 = el("div",{class:"hh-card"},[el("h3",{text:"Por área"})]); hhBars(hh.porArea, maxA, c3); grid.appendChild(c3); }
+    if (hh.porCategoria.length){ const maxC = Math.max(...hh.porCategoria.map(x=>x[1])); const c4 = el("div",{class:"hh-card"},[el("h3",{text:"Por categoría de cliente"})]); hhBars(hh.porCategoria, maxC, c4); grid.appendChild(c4); }
+    if (hh.porMes && hh.porMes.length > 1){ const maxM = Math.max(...hh.porMes.map(x=>x[1])); const c5 = el("div",{class:"hh-card"},[el("h3",{text:"Por mes"})]); hhBars(hh.porMes, maxM, c5); grid.appendChild(c5); }
+    if (hh.ejecucion && hh.ejecucion.length){
+      const c6 = el("div", {class:"hh-card"}, [ el("h3",{text:"Ejecución HH vs. presupuesto"}) ]);
+      hh.ejecucion.slice(0,7).forEach(p => {
+        const ratio = p.presupuesto ? p.consumido/p.presupuesto : 0;
+        const status = ratio > 1 ? "critical" : ratio > 0.85 ? "warning" : "good";
+        c6.appendChild(el("div", {class:"proy-row"}, [ el("span",{text:p.name}), el("b",{text: fmtNum(p.consumido,1) + " / " + fmtNum(p.presupuesto,1) + " h"}) ]));
+        const track = el("div", {class:"bar-track"}, [ el("div",{class:"bar-fill"}) ]);
+        track.querySelector(".bar-fill").style.width = Math.min(ratio,1)*100 + "%";
+        track.querySelector(".bar-fill").style.background = status==="critical" ? "var(--critical)" : status==="warning" ? "var(--warning)" : "var(--good)";
+        c6.appendChild(track);
+      });
+      grid.appendChild(c6);
+    }
+  }
+
+  /* ================= file intake ================= */
+  function handleFiles(fileList){
+    Array.from(fileList).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try{
+          const wb = XLSX.read(new Uint8Array(e.target.result), {type:"array"});
+          const type = classifyWorkbook(wb);
+          state.manifest.push({name:file.name, type});
+          if (type === "panel"){
+            const snap = parsePanelWorkbook(wb, file.name);
+            state.snapshots = state.snapshots.filter(s => s.fileName !== file.name);
+            state.snapshots.push(snap);
+            state.snapshots.sort((a,b)=> a.label.localeCompare(b.label,"es"));
+            state.activeSnapshot = state.snapshots.length - 1;
+            render();
+            saveSnapshotToDb("panel", periodoFromLabel(snap.label), snap, file.name);
+          } else if (type === "cxc"){
+            const cxc = parseCxC(wb);
+            cxc.fileName = file.name;
+            state.cxc = cxc;
+            render();
+            saveSnapshotToDb("cxc", "latest", cxc, file.name);
+          } else if (type === "hh"){
+            const parsed = parseHH(wb);
+            if (parsed){
+              parsed.fileName = file.name;
+              state.hh = parsed;
+              render();
+              saveSnapshotToDb("hh", "latest", parsed, file.name);
+            } else {
+              state.manifest[state.manifest.length-1].type = "unknown";
+              render();
+            }
+          } else {
+            render();
+          }
+        } catch(err){
+          state.manifest.push({name:file.name + " (error)", type:"unknown"});
+          console.error("Error leyendo " + file.name, err);
+          render();
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  /* ================= Supabase: persistencia compartida ================= */
+  const SUPABASE_URL = "https://xdislftwnamrlqqxybtm.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkaXNsZnR3bmFtcmxxcXh5YnRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjgyMDUsImV4cCI6MjA5NzEwNDIwNX0.1Z4C_57iMZEBd9Di5s6UJN8EUeKsmLZXUVCfloKZxO4";
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  let currentUserEmail = null;
+  let realtimeChannel = null;
+
+  function periodoFromLabel(label){
+    // "Agosto 2026" -> "2026-08". Si no calza el patrón, usa el label tal cual (igual queda único por mes).
+    const m = String(label||"").match(/([A-Za-zÀ-ÿ]+)\s+(\d{4})/);
+    if (!m) return label || "sin-mes";
+    const idx = MONTH_LABELS.findIndex(x => strip(x) === strip(m[1]));
+    if (idx === -1) return label;
+    return m[2] + "-" + String(idx+1).padStart(2,"0");
+  }
+
+  function setSyncing(isSyncing){
+    const dot = $("syncDot");
+    if (dot) dot.classList.toggle("syncing", isSyncing);
+  }
+
+  async function saveSnapshotToDb(tipo, periodo, data, fileName){
+    if (!currentUserEmail) return;
+    setSyncing(true);
+    const row = { tipo, periodo, data, file_name: fileName, uploaded_by: currentUserEmail, uploaded_at: new Date().toISOString() };
+    const { error } = await sb.from("agi_snapshots").upsert(row, { onConflict: "tipo,periodo" });
+    setSyncing(false);
+    if (error){
+      console.error("Error guardando en el panel compartido:", error);
+      alert("Se ve en tu pantalla, pero no se pudo guardar para que los demás lo vean (" + error.message + "). Intenta subir el archivo de nuevo.");
+    }
+  }
+
+  function rowToState(row){
+    return Object.assign({}, row.data, { _uploadedBy: row.uploaded_by, _uploadedAt: row.uploaded_at });
+  }
+
+  async function loadAllFromDb(){
+    setSyncing(true);
+    const [{ data: panels, error: e1 }, { data: cxcRows, error: e2 }, { data: hhRows, error: e3 }] = await Promise.all([
+      sb.from("agi_snapshots").select("*").eq("tipo","panel").order("periodo"),
+      sb.from("agi_snapshots").select("*").eq("tipo","cxc").eq("periodo","latest").limit(1),
+      sb.from("agi_snapshots").select("*").eq("tipo","hh").eq("periodo","latest").limit(1)
+    ]);
+    setSyncing(false);
+    if (e1 || e2 || e3){ console.error("Error cargando datos compartidos:", e1||e2||e3); return; }
+    if (panels && panels.length){
+      state.snapshots = panels.map(rowToState);
+      state.activeSnapshot = state.snapshots.length - 1;
+    }
+    if (cxcRows && cxcRows.length) state.cxc = rowToState(cxcRows[0]);
+    if (hhRows && hhRows.length) state.hh = rowToState(hhRows[0]);
+    render();
+  }
+
+  function subscribeRealtime(){
+    if (realtimeChannel) return;
+    realtimeChannel = sb.channel("agi_snapshots_live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "agi_snapshots" }, () => { loadAllFromDb(); })
+      .subscribe();
+  }
+
+  /* ================= autenticación (código por correo) ================= */
+  async function checkAllowed(email){
+    const { data, error } = await sb.from("agi_allowed_users").select("email").eq("email", email).eq("activo", true).maybeSingle();
+    if (error){ console.error(error); return false; }
+    return !!data;
+  }
+
+  function showApp(email){
+    currentUserEmail = email;
+    $("loginGate").hidden = true;
+    $("app").hidden = false;
+    $("whoEmail").textContent = email;
+    loadAllFromDb();
+    subscribeRealtime();
+  }
+
+  function showLogin(){
+    $("app").hidden = true;
+    $("loginGate").hidden = false;
+  }
+
+  async function initAuth(){
+    const { data: { session } } = await sb.auth.getSession();
+    if (session && session.user && session.user.email){
+      const ok = await checkAllowed(session.user.email);
+      if (ok){ showApp(session.user.email); return; }
+      await sb.auth.signOut();
+    }
+    showLogin();
+  }
+
+  let pendingEmail = null;
+  $("sendCodeBtn").addEventListener("click", async () => {
+    const email = $("emailInput").value.trim().toLowerCase();
+    const msg = $("emailMsg");
+    if (!email || email.indexOf("@") === -1){ msg.className = "msg err"; msg.textContent = "Ingresa un correo válido."; return; }
+    $("sendCodeBtn").disabled = true;
+    msg.className = "msg"; msg.textContent = "Enviando código...";
+    const { error } = await sb.auth.signInWithOtp({ email });
+    $("sendCodeBtn").disabled = false;
+    if (error){ msg.className = "msg err"; msg.textContent = "No se pudo enviar el código: " + error.message; return; }
+    pendingEmail = email;
+    msg.className = "msg ok"; msg.textContent = "Listo, revisa tu correo.";
+    $("stepEmail").hidden = true; $("stepCode").hidden = false;
+    $("codeInput").focus();
+  });
+  $("backToEmail").addEventListener("click", () => {
+    $("stepCode").hidden = true; $("stepEmail").hidden = false;
+    $("codeMsg").textContent = ""; $("codeInput").value = "";
+  });
+  $("verifyCodeBtn").addEventListener("click", async () => {
+    const token = $("codeInput").value.trim();
+    const msg = $("codeMsg");
+    if (!pendingEmail || !token){ msg.className = "msg err"; msg.textContent = "Ingresa el código que te llegó."; return; }
+    $("verifyCodeBtn").disabled = true;
+    msg.className = "msg"; msg.textContent = "Verificando...";
+    const { data, error } = await sb.auth.verifyOtp({ email: pendingEmail, token, type: "email" });
+    $("verifyCodeBtn").disabled = false;
+    if (error){ msg.className = "msg err"; msg.textContent = "Código incorrecto o vencido: " + error.message; return; }
+    const email = data.user.email;
+    const ok = await checkAllowed(email);
+    if (!ok){
+      msg.className = "msg err";
+      msg.textContent = "Tu correo (" + email + ") no está autorizado para este panel. Pide a Sebastián que te agregue.";
+      await sb.auth.signOut();
+      return;
+    }
+    showApp(email);
+  });
+  $("logoutBtn").addEventListener("click", async () => {
+    if (realtimeChannel){ sb.removeChannel(realtimeChannel); realtimeChannel = null; }
+    await sb.auth.signOut();
+    currentUserEmail = null;
+    $("codeInput").value = ""; $("emailInput").value = "";
+    $("stepCode").hidden = true; $("stepEmail").hidden = false;
+    showLogin();
+  });
+
+  const dock = $("dock");
+  $("pickBtn").addEventListener("click", () => $("fileInput").click());
+  $("fileInput").addEventListener("change", (e) => handleFiles(e.target.files));
+  ["dragenter","dragover"].forEach(ev => dock.addEventListener(ev, (e) => { e.preventDefault(); dock.classList.add("dragover"); }));
+  ["dragleave","drop"].forEach(ev => dock.addEventListener(ev, (e) => { e.preventDefault(); dock.classList.remove("dragover"); }));
+  dock.addEventListener("drop", (e) => handleFiles(e.dataTransfer.files));
+
+  initAuth();
+})();
+</script>
+</body>
+</html>
