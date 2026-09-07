@@ -6,7 +6,6 @@
 <title>Cockpit AGI Eléctrica</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;650&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 
 <style>
   :root{
@@ -182,53 +181,12 @@
     th,td{padding:7px 8px; font-size:12px;}
   }
 
-  /* ================= login gate ================= */
-  #loginGate{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; background:var(--paper); }
-  .login-card{ width:100%; max-width:380px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:28px 26px; }
-  .login-card .brand-text b{font-size:16px;}
-  .login-card h1{ font-size:17px; margin:18px 0 6px; }
-  .login-card p{ font-size:13px; color:var(--ink-muted); line-height:1.5; margin-bottom:16px; }
-  .login-card input{ width:100%; box-sizing:border-box; font-family:inherit; font-size:14px; padding:10px 12px; border:1px solid var(--line-strong); border-radius:8px; background:var(--surface-2); color:var(--ink); margin-bottom:10px; }
-  .login-card input:focus{ outline:2px solid var(--accent); outline-offset:1px; }
-  .login-card button{ width:100%; font-family:inherit; font-size:13.5px; font-weight:600; padding:10px 12px; border-radius:8px; border:none; background:var(--accent); color:var(--accent-ink); cursor:pointer; }
-  .login-card button:disabled{ opacity:.5; cursor:default; }
-  .login-card .msg{ font-size:12.5px; margin-top:10px; min-height:16px; }
-  .login-card .msg.err{ color:var(--critical); }
-  .login-card .msg.ok{ color:var(--good); }
-  .login-card .back-link{ display:inline-block; margin-top:12px; font-size:12.5px; color:var(--ink-faint); cursor:pointer; text-decoration:underline; }
   [hidden]{ display:none !important; }
-  .who{ display:flex; align-items:center; gap:10px; font-size:12px; color:var(--ink-faint); }
-  .who button{ font-family:inherit; font-size:12px; padding:5px 10px; border-radius:6px; border:1px solid var(--line-strong); background:var(--surface); color:var(--ink-muted); cursor:pointer; }
-  .sync-dot{ width:7px; height:7px; border-radius:50%; background:var(--good); flex:none; }
-  .sync-dot.syncing{ background:var(--warning); }
 </style>
 </head>
 <body>
 
-<div id="loginGate">
-  <div class="login-card">
-    <div class="brand-text"><b>Cockpit AGI Eléctrica</b><span style="display:block;color:var(--ink-muted);font-size:12px;margin-top:2px;">Control de Gestión · Trei</span></div>
-
-    <div id="stepEmail">
-      <h1>Ingresa con tu correo Trei</h1>
-      <p>Te enviamos un código de 6 dígitos a tu correo. Solo personas autorizadas pueden ver y cargar datos de este panel.</p>
-      <input id="emailInput" type="email" placeholder="nombre@trei.cl" autocomplete="email">
-      <button id="sendCodeBtn">Enviar código</button>
-      <div class="msg" id="emailMsg"></div>
-    </div>
-
-    <div id="stepCode" hidden>
-      <h1>Ingresa el código</h1>
-      <p>Revisa tu correo — te llegó un código de 6 dígitos.</p>
-      <input id="codeInput" type="text" inputmode="numeric" placeholder="123456" maxlength="6">
-      <button id="verifyCodeBtn">Ingresar</button>
-      <div class="msg" id="codeMsg"></div>
-      <span class="back-link" id="backToEmail">usar otro correo</span>
-    </div>
-  </div>
-</div>
-
-<div class="shell" id="app" hidden>
+<div class="shell" id="app">
 
   <header class="topbar">
     <div class="brand">
@@ -236,11 +194,6 @@
       <div class="brand-text"><b>Cockpit AGI Eléctrica</b><span>Control de Gestión · Trei</span></div>
     </div>
     <div class="snapshot-tabs" id="snapshotTabs"></div>
-    <div class="who">
-      <span class="sync-dot" id="syncDot" title="Sincronizado"></span>
-      <span id="whoEmail"></span>
-      <button id="logoutBtn" type="button">Cerrar sesión</button>
-    </div>
   </header>
 
   <main>
@@ -248,7 +201,7 @@
       <svg class="dock-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v12m0-12 4 4m-4-4-4 4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <div class="dock-text">
         <b>Suelta aquí los Excel de este mes</b>
-        <p>Panel Financiero, Cuentas por Cobrar y Horas Hombre — los que tengas. Se detecta el tipo de cada archivo automáticamente. El Excel se lee en tu navegador y solo se guarda el resumen ya calculado — visible para quienes tengan acceso a este panel.</p>
+        <p>Panel Financiero, Cuentas por Cobrar y Horas Hombre — los que tengas. Se detecta el tipo de cada archivo automáticamente. Todo se procesa en tu navegador: nada se sube ni se guarda en ningún servidor.</p>
       </div>
       <button id="pickBtn" type="button">Elegir archivos</button>
       <input id="fileInput" class="visually-hidden" type="file" multiple accept=".xlsx,.xls,.csv">
@@ -289,7 +242,7 @@
     </section>
 
     <footer>
-      <span>El Excel se procesa en tu navegador; solo el resumen se guarda para que el panel se actualice para todos.</span>
+      <span>Todo se procesa en tu navegador — nada sale de aquí.</span>
       <span id="lastUpdated"></span>
     </footer>
   </main>
@@ -361,7 +314,7 @@
 
   /* ================= state ================= */
   const state = {
-    snapshots: [],        // parsed "Panel Financiero" workbooks, one per month file
+    snapshots: [],        // parsed "Panel Financiero" workbooks, one por mes archivo
     activeSnapshot: null, // index
     cxc: null, cxcIsDemo: true,
     hh: null, hhIsDemo: true,
@@ -770,15 +723,6 @@
   /* ================= rendering ================= */
   function activeSnap(){ return state.snapshots[state.activeSnapshot] || demoSnapshot(); }
 
-  function fmtWhen(iso){
-    if (!iso) return "";
-    try{ return new Date(iso).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}); } catch(e){ return ""; }
-  }
-  function attrib(obj){
-    if (!obj || !obj._uploadedBy) return "";
-    return " · subido por " + obj._uploadedBy + " · " + fmtWhen(obj._uploadedAt);
-  }
-
   function render(){
     renderManifest();
     renderTabs();
@@ -791,10 +735,10 @@
     renderProyectos(snap);
     renderCxC(cxc);
     renderHH(hh);
-    $("srcFlujo").textContent = "hoja: Resumen General — " + (snap.fileName || "") + attrib(snap);
-    $("srcProyectos").textContent = "hojas: CC-* / IG-* — " + (snap.fileName || "") + attrib(snap);
-    $("srcCxc").textContent = (cxc.isDemo ? "ejemplo" : (cxc.fileName || "AGI_Clientes")) + attrib(cxc);
-    $("srcHh").textContent = (hh.isDemo ? "ejemplo" : "archivo cargado") + attrib(hh);
+    $("srcFlujo").textContent = "hoja: Resumen General — " + (snap.fileName || "");
+    $("srcProyectos").textContent = "hojas: CC-* / IG-* — " + (snap.fileName || "");
+    $("srcCxc").textContent = cxc.isDemo ? "ejemplo" : (cxc.fileName || "AGI_Clientes");
+    $("srcHh").textContent = hh.isDemo ? "ejemplo" : (hh.fileName || "archivo cargado");
     $("lastUpdated").textContent = "Vista: " + (snap.label || "") + " · " + new Date().toLocaleString("es-CL");
   }
 
@@ -993,20 +937,17 @@
             state.snapshots.sort((a,b)=> a.label.localeCompare(b.label,"es"));
             state.activeSnapshot = state.snapshots.length - 1;
             render();
-            saveSnapshotToDb("panel", periodoFromLabel(snap.label), snap, file.name);
           } else if (type === "cxc"){
             const cxc = parseCxC(wb);
             cxc.fileName = file.name;
             state.cxc = cxc;
             render();
-            saveSnapshotToDb("cxc", "latest", cxc, file.name);
           } else if (type === "hh"){
             const parsed = parseHH(wb);
             if (parsed){
               parsed.fileName = file.name;
               state.hh = parsed;
               render();
-              saveSnapshotToDb("hh", "latest", parsed, file.name);
             } else {
               state.manifest[state.manifest.length-1].type = "unknown";
               render();
@@ -1024,146 +965,6 @@
     });
   }
 
-  /* ================= Supabase: persistencia compartida ================= */
-  const SUPABASE_URL = "https://xdislftwnamrlqqxybtm.supabase.co";
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkaXNsZnR3bmFtcmxxcXh5YnRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjgyMDUsImV4cCI6MjA5NzEwNDIwNX0.1Z4C_57iMZEBd9Di5s6UJN8EUeKsmLZXUVCfloKZxO4";
-  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  let currentUserEmail = null;
-  let realtimeChannel = null;
-
-  function periodoFromLabel(label){
-    // "Agosto 2026" -> "2026-08". Si no calza el patrón, usa el label tal cual (igual queda único por mes).
-    const m = String(label||"").match(/([A-Za-zÀ-ÿ]+)\s+(\d{4})/);
-    if (!m) return label || "sin-mes";
-    const idx = MONTH_LABELS.findIndex(x => strip(x) === strip(m[1]));
-    if (idx === -1) return label;
-    return m[2] + "-" + String(idx+1).padStart(2,"0");
-  }
-
-  function setSyncing(isSyncing){
-    const dot = $("syncDot");
-    if (dot) dot.classList.toggle("syncing", isSyncing);
-  }
-
-  async function saveSnapshotToDb(tipo, periodo, data, fileName){
-    if (!currentUserEmail) return;
-    setSyncing(true);
-    const row = { tipo, periodo, data, file_name: fileName, uploaded_by: currentUserEmail, uploaded_at: new Date().toISOString() };
-    const { error } = await sb.from("agi_snapshots").upsert(row, { onConflict: "tipo,periodo" });
-    setSyncing(false);
-    if (error){
-      console.error("Error guardando en el panel compartido:", error);
-      alert("Se ve en tu pantalla, pero no se pudo guardar para que los demás lo vean (" + error.message + "). Intenta subir el archivo de nuevo.");
-    }
-  }
-
-  function rowToState(row){
-    return Object.assign({}, row.data, { _uploadedBy: row.uploaded_by, _uploadedAt: row.uploaded_at });
-  }
-
-  async function loadAllFromDb(){
-    setSyncing(true);
-    const [{ data: panels, error: e1 }, { data: cxcRows, error: e2 }, { data: hhRows, error: e3 }] = await Promise.all([
-      sb.from("agi_snapshots").select("*").eq("tipo","panel").order("periodo"),
-      sb.from("agi_snapshots").select("*").eq("tipo","cxc").eq("periodo","latest").limit(1),
-      sb.from("agi_snapshots").select("*").eq("tipo","hh").eq("periodo","latest").limit(1)
-    ]);
-    setSyncing(false);
-    if (e1 || e2 || e3){ console.error("Error cargando datos compartidos:", e1||e2||e3); return; }
-    if (panels && panels.length){
-      state.snapshots = panels.map(rowToState);
-      state.activeSnapshot = state.snapshots.length - 1;
-    }
-    if (cxcRows && cxcRows.length) state.cxc = rowToState(cxcRows[0]);
-    if (hhRows && hhRows.length) state.hh = rowToState(hhRows[0]);
-    render();
-  }
-
-  function subscribeRealtime(){
-    if (realtimeChannel) return;
-    realtimeChannel = sb.channel("agi_snapshots_live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "agi_snapshots" }, () => { loadAllFromDb(); })
-      .subscribe();
-  }
-
-  /* ================= autenticación (código por correo) ================= */
-  async function checkAllowed(email){
-    const { data, error } = await sb.from("agi_allowed_users").select("email").eq("email", email).eq("activo", true).maybeSingle();
-    if (error){ console.error(error); return false; }
-    return !!data;
-  }
-
-  function showApp(email){
-    currentUserEmail = email;
-    $("loginGate").hidden = true;
-    $("app").hidden = false;
-    $("whoEmail").textContent = email;
-    loadAllFromDb();
-    subscribeRealtime();
-  }
-
-  function showLogin(){
-    $("app").hidden = true;
-    $("loginGate").hidden = false;
-  }
-
-  async function initAuth(){
-    const { data: { session } } = await sb.auth.getSession();
-    if (session && session.user && session.user.email){
-      const ok = await checkAllowed(session.user.email);
-      if (ok){ showApp(session.user.email); return; }
-      await sb.auth.signOut();
-    }
-    showLogin();
-  }
-
-  let pendingEmail = null;
-  $("sendCodeBtn").addEventListener("click", async () => {
-    const email = $("emailInput").value.trim().toLowerCase();
-    const msg = $("emailMsg");
-    if (!email || email.indexOf("@") === -1){ msg.className = "msg err"; msg.textContent = "Ingresa un correo válido."; return; }
-    $("sendCodeBtn").disabled = true;
-    msg.className = "msg"; msg.textContent = "Enviando código...";
-    const { error } = await sb.auth.signInWithOtp({ email });
-    $("sendCodeBtn").disabled = false;
-    if (error){ msg.className = "msg err"; msg.textContent = "No se pudo enviar el código: " + error.message; return; }
-    pendingEmail = email;
-    msg.className = "msg ok"; msg.textContent = "Listo, revisa tu correo.";
-    $("stepEmail").hidden = true; $("stepCode").hidden = false;
-    $("codeInput").focus();
-  });
-  $("backToEmail").addEventListener("click", () => {
-    $("stepCode").hidden = true; $("stepEmail").hidden = false;
-    $("codeMsg").textContent = ""; $("codeInput").value = "";
-  });
-  $("verifyCodeBtn").addEventListener("click", async () => {
-    const token = $("codeInput").value.trim();
-    const msg = $("codeMsg");
-    if (!pendingEmail || !token){ msg.className = "msg err"; msg.textContent = "Ingresa el código que te llegó."; return; }
-    $("verifyCodeBtn").disabled = true;
-    msg.className = "msg"; msg.textContent = "Verificando...";
-    const { data, error } = await sb.auth.verifyOtp({ email: pendingEmail, token, type: "email" });
-    $("verifyCodeBtn").disabled = false;
-    if (error){ msg.className = "msg err"; msg.textContent = "Código incorrecto o vencido: " + error.message; return; }
-    const email = data.user.email;
-    const ok = await checkAllowed(email);
-    if (!ok){
-      msg.className = "msg err";
-      msg.textContent = "Tu correo (" + email + ") no está autorizado para este panel. Pide a Sebastián que te agregue.";
-      await sb.auth.signOut();
-      return;
-    }
-    showApp(email);
-  });
-  $("logoutBtn").addEventListener("click", async () => {
-    if (realtimeChannel){ sb.removeChannel(realtimeChannel); realtimeChannel = null; }
-    await sb.auth.signOut();
-    currentUserEmail = null;
-    $("codeInput").value = ""; $("emailInput").value = "";
-    $("stepCode").hidden = true; $("stepEmail").hidden = false;
-    showLogin();
-  });
-
   const dock = $("dock");
   $("pickBtn").addEventListener("click", () => $("fileInput").click());
   $("fileInput").addEventListener("change", (e) => handleFiles(e.target.files));
@@ -1171,7 +972,7 @@
   ["dragleave","drop"].forEach(ev => dock.addEventListener(ev, (e) => { e.preventDefault(); dock.classList.remove("dragover"); }));
   dock.addEventListener("drop", (e) => handleFiles(e.dataTransfer.files));
 
-  initAuth();
+  render();
 })();
 </script>
 </body>
