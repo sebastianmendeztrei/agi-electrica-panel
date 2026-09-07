@@ -17,6 +17,7 @@
     --warning:#a8720c; --warning-soft:#fbf0dc;
     --critical:#c0392b; --critical-soft:#fceae8;
     --proj-raices:#3b6fd1; --proj-condell:#c77d2e; --proj-tsm:#2f9e82; --proj-cdp4:#8b5fbf; --proj-other:#6b7280;
+    --cat-1:#3b6fd1; --cat-2:#2f9e82; --cat-3:#c77d2e; --cat-4:#8b5fbf; --cat-5:#b0507a; --cat-6:#6b8f3c; --cat-7:#4a7f9e; --cat-8:#9c6b3f;
     --shadow: 0 1px 2px rgba(28,31,36,.06), 0 4px 14px rgba(28,31,36,.05);
     --radius: 10px;
   }
@@ -30,6 +31,7 @@
       --warning:#f0b429; --warning-soft:#3a2c0e;
       --critical:#f1595c; --critical-soft:#3a1616;
       --proj-raices:#5b8ae6; --proj-condell:#b87330; --proj-tsm:#3faa90; --proj-cdp4:#a17ed1; --proj-other:#8a93a3;
+      --cat-1:#5b8ae6; --cat-2:#3faa90; --cat-3:#d99b52; --cat-4:#a17ed1; --cat-5:#d17aa0; --cat-6:#8fb85e; --cat-7:#6fa5c2; --cat-8:#bd8a5c;
       --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 18px rgba(0,0,0,.35);
     }
   }
@@ -42,6 +44,7 @@
     --warning:#f0b429; --warning-soft:#3a2c0e;
     --critical:#f1595c; --critical-soft:#3a1616;
     --proj-raices:#5b8ae6; --proj-condell:#b87330; --proj-tsm:#3faa90; --proj-cdp4:#a17ed1; --proj-other:#8a93a3;
+    --cat-1:#5b8ae6; --cat-2:#3faa90; --cat-3:#d99b52; --cat-4:#a17ed1; --cat-5:#d17aa0; --cat-6:#8fb85e; --cat-7:#6fa5c2; --cat-8:#bd8a5c;
     --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 18px rgba(0,0,0,.35);
   }
 
@@ -166,6 +169,24 @@
   .hh-item .hh-fill{height:100%; background:var(--proj-raices); border-radius:4px;}
   .hh-item .hh-val{font-family:"IBM Plex Mono",monospace; text-align:right; color:var(--ink);}
 
+  .hh-toolbar{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;}
+  .hh-filter-tab{border:1px solid var(--line-strong); border-radius:999px; background:var(--surface); padding:6px 14px; font-size:12.5px; color:var(--ink-muted); cursor:pointer; font-family:inherit;}
+  .hh-filter-tab.active{background:var(--accent); border-color:var(--accent); color:var(--accent-ink);}
+  .hh-filter-sub{display:flex; gap:6px; flex-wrap:wrap; margin:0 0 16px;}
+  .hh-filter-chip{border:1px dashed var(--line-strong); border-radius:999px; background:var(--surface-2); padding:4px 12px; font-size:11.5px; color:var(--ink-muted); cursor:pointer; font-family:inherit;}
+  .hh-filter-chip.active{background:var(--accent-soft); border-color:var(--accent); color:var(--accent); border-style:solid;}
+  .hh-context-stat{font-size:12px; color:var(--ink-faint); margin:-2px 0 14px; font-family:"IBM Plex Mono",monospace;}
+  .donut-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; margin-bottom:14px;}
+  .donut-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px 18px;}
+  .donut-card h3{font-size:12.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-muted); margin-bottom:12px;}
+  .donut-wrap{display:flex; align-items:center; gap:18px; flex-wrap:wrap;}
+  .donut-wrap svg{flex:none;}
+  .donut-legend{display:flex; flex-direction:column; gap:5px; min-width:150px; flex:1;}
+  .donut-legend-row{display:grid; grid-template-columns:10px 1fr auto; align-items:center; gap:7px; font-size:12px;}
+  .donut-legend-row .sw{width:10px; height:10px; border-radius:3px;}
+  .donut-legend-row .lbl{color:var(--ink-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .donut-legend-row .val{font-family:"IBM Plex Mono",monospace; color:var(--ink); font-size:11.5px; white-space:nowrap;}
+
   .tooltip{
     position:fixed; pointer-events:none; background:var(--ink); color:var(--paper); font-size:12px;
     font-family:"IBM Plex Mono",monospace; padding:8px 10px; border-radius:7px; box-shadow:var(--shadow);
@@ -228,6 +249,7 @@
 
     <section class="panel">
       <div class="panel-head"><h2>Control de costos por proyecto</h2><span class="src" id="srcProyectos"></span></div>
+      <div class="donut-row" id="proyectosDonutRow"></div>
       <div class="proyectos-grid" id="proyectosGrid"></div>
     </section>
 
@@ -238,6 +260,10 @@
 
     <section class="panel">
       <div class="panel-head"><h2>Horas hombre</h2><span class="src" id="srcHh"></span></div>
+      <div class="hh-toolbar" id="hhAreaTabs"></div>
+      <div class="hh-filter-sub" id="hhPersonaChips"></div>
+      <div class="hh-context-stat" id="hhContextStat"></div>
+      <div class="donut-row" id="hhDonutRow"></div>
       <div class="hh-grid" id="hhGrid"></div>
     </section>
 
@@ -312,14 +338,83 @@
     return "var(--proj-other)";
   }
 
+  /* ================= gráficos de torta/dona (vistas por proyecto) ================= */
+  const CAT_PALETTE = ["--cat-1","--cat-2","--cat-3","--cat-4","--cat-5","--cat-6","--cat-7","--cat-8"];
+  function catColor(i){ return i < CAT_PALETTE.length ? "var(" + CAT_PALETTE[i] + ")" : "var(--ink-faint)"; }
+  // Agrupa todo lo que exceda maxSlices en un ítem "Otros" — nunca una torta arcoíris de más de 8 colores.
+  function topWithOthers(items, maxSlices){
+    maxSlices = maxSlices || 7;
+    if (items.length <= maxSlices) return items;
+    const top = items.slice(0, maxSlices);
+    const restSum = items.slice(maxSlices).reduce((a,[,v]) => a+v, 0);
+    return restSum > 0 ? top.concat([["Otros", restSum]]) : top;
+  }
+  // Dona SVG (stroke-dasharray sobre un círculo) con centro numérico y leyenda directa —
+  // mismo tipo de gráfico que las tortas de Power BI, con paleta fija y separación entre tramos.
+  function donutChart(items, opts){
+    opts = opts || {};
+    if (!items || !items.length) return el("div", {class:"empty-note", text:"Sin datos para este filtro."});
+    const size = opts.size || 168, sw = opts.stroke || 24;
+    const fmtVal = opts.formatValue || ((v) => fmtNum(v,1) + " h");
+    const unitLabel = opts.unitLabel != null ? opts.unitLabel : "horas";
+    const r = (size - sw) / 2, C = 2 * Math.PI * r;
+    const shown = topWithOthers(items, opts.maxSlices || 7);
+    const total = shown.reduce((a,[,v]) => a + v, 0) || 1;
+    const gap = shown.length > 1 ? 3 : 0;
+    let offset = 0, arcs = "";
+    shown.forEach(([label, val], i) => {
+      const frac = val / total;
+      const len = Math.max(0, frac * C - gap);
+      const color = label === "Otros" ? "var(--ink-faint)" : catColor(i);
+      arcs += `<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" ` +
+        `stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${size/2} ${size/2})">` +
+        `<title>${label}: ${fmtVal(val)} (${pct(frac)})</title></circle>`;
+      offset += frac * C;
+    });
+    const wrap = el("div", {class:"donut-wrap"});
+    const centerVal = opts.centerText || fmtVal(total);
+    wrap.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${arcs}` +
+      `<text x="${size/2}" y="${size/2-5}" text-anchor="middle" font-family="IBM Plex Mono" font-size="${centerVal.length>7?14:19}" font-weight="600" fill="var(--ink)">${centerVal}</text>` +
+      (unitLabel ? `<text x="${size/2}" y="${size/2+14}" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="var(--ink-faint)">${unitLabel}</text>` : "") + `</svg>`;
+    const legend = el("div", {class:"donut-legend"});
+    shown.forEach(([label, val], i) => {
+      const color = label === "Otros" ? "var(--ink-faint)" : catColor(i);
+      const row = el("div", {class:"donut-legend-row"}, [
+        el("span", {class:"sw"}),
+        el("span", {class:"lbl", text:label, title:label}),
+        el("span", {class:"val", text: fmtVal(val) + " · " + pct(val/total)})
+      ]);
+      row.querySelector(".sw").style.background = color;
+      legend.appendChild(row);
+    });
+    wrap.appendChild(legend);
+    return wrap;
+  }
+  // Recalcula "por proyecto" y "por tipo de cliente" a partir del detalle fila-a-fila,
+  // filtrando por área y/o persona — así los tabs de la vista por proyecto no necesitan
+  // volver a leer el Excel, solo re-agregan lo que ya se parseó una vez.
+  function hhAggregate(rows, filterArea, filterPersona){
+    const filtered = rows.filter(r => (!filterArea || r.area === filterArea) && (!filterPersona || r.persona === filterPersona));
+    const byProyecto = {}, byCategoria = {};
+    let total = 0;
+    filtered.forEach(r => {
+      byProyecto[r.proyecto] = (byProyecto[r.proyecto]||0) + r.horas;
+      byCategoria[r.categoria] = (byCategoria[r.categoria]||0) + r.horas;
+      total += r.horas;
+    });
+    const toSorted = (obj) => Object.entries(obj).sort((a,b)=>b[1]-a[1]);
+    return { total, porProyecto: toSorted(byProyecto), porCategoria: toSorted(byCategoria) };
+  }
+
   /* ================= state ================= */
   const state = {
-    snapshots: [],        // parsed "Panel Financiero" workbooks, one por mes archivo
+    snapshots: [],        // parsed "Panel Financiero" workbooks, one per month file
     activeSnapshot: null, // index
     cxc: null, cxcIsDemo: true,
     hh: null, hhIsDemo: true,
     manifest: []           // {name, type, note}
   };
+  const hhFilter = { area: null, persona: null }; // vista por proyecto: filtro activo en la sección Horas Hombre
 
   /* ================= classification ================= */
   function classifyWorkbook(wb){
@@ -578,6 +673,7 @@
     const catalogo = parseProyectosCatalogo(proyectosSheet);
 
     const byProyecto={}, byPersona={}, byArea={}, byCategoria={}, byMes={};
+    const detailRows = [];
     let total = 0, minDate = null, maxDate = null;
     for (let r=headerRow+1;r<rows.length;r++){
       const row = rows[r];
@@ -598,6 +694,7 @@
         if (entry) categoria = entry.categoria;
       }
       byCategoria[categoria] = (byCategoria[categoria]||0) + h;
+      detailRows.push({persona, area, categoria, proyecto: proyDisplay, horas: h});
       if (col.fecha > -1){
         const d = excelSerialToDate(row[col.fecha]);
         if (d){
@@ -630,7 +727,8 @@
     return {
       total, isReal:true, periodo,
       porProyecto: toSorted(byProyecto), porPersona: toSorted(byPersona),
-      porArea: toSorted(byArea), porCategoria: toSorted(byCategoria), porMes, ejecucion
+      porArea: toSorted(byArea), porCategoria: toSorted(byCategoria), porMes, ejecucion,
+      rows: detailRows
     };
   }
   // Formato de respaldo: cualquier tabla plana con columnas Proyecto + Horas (por si en el
@@ -665,7 +763,7 @@
     }
     if (!total) return null;
     const toSorted = (obj) => Object.entries(obj).sort((a,b)=>b[1]-a[1]);
-    return { total, isReal:true, periodo:null, porProyecto: toSorted(byProyecto), porPersona:[], porArea: toSorted(byArea), porCategoria: toSorted(byCategoria), porMes:[], ejecucion:null };
+    return { total, isReal:true, periodo:null, porProyecto: toSorted(byProyecto), porPersona:[], porArea: toSorted(byArea), porCategoria: toSorted(byCategoria), porMes:[], ejecucion:null, rows: [] };
   }
   function parseHH(wb){
     return parseHHRegistro(wb) || parseHHFlat(wb);
@@ -702,13 +800,38 @@
     ].sort((a,b)=>b.saldo-a.saldo), grandTotal: 11486344, isDemo:true };
   }
   function demoHH(){
+    // Datos de ejemplo modelados sobre el mismo reporte de Power BI de Alex ("Reporte de rendimiento
+    // de Hora Hombre — Empresa TOTAL", Agosto 2026): mismas áreas, personas y proyectos, para que la
+    // vista por proyecto/área/persona se vea igual de útil incluso antes de subir un Excel real.
+    const CAT_BY_PROYECTO = {
+      "Terraza Santa Maria":"Cliente_Interno", "GESTION Y VENTA":"Oficina_Central", "Casas del Pinar 4":"Cliente_Interno",
+      "Chalinga":"Cliente_Externo", "Mirador Santa Teresita":"Cliente_Externo", "ADM Y LOGISTICA":"Oficina_Central",
+      "LIBRE":"Oficina_Central", "Plaza Los Pinos":"Cliente_Externo", "Condell":"Cliente_Interno",
+      "CAPACITACION":"Oficina_Central", "Cromático":"Cliente_Interno", "El Yugo":"Cliente_Interno"
+    };
+    const raw = [
+      ["Gerencia","Alex Balboa","GESTION Y VENTA",67.5], ["Gerencia","Alex Balboa","Chalinga",20.5],
+      ["Gerencia","Alex Balboa","Condell",17.5], ["Gerencia","Alex Balboa","Casas del Pinar 4",16.5],
+      ["Gerencia","Alex Balboa","Terraza Santa Maria",16], ["Gerencia","Alex Balboa","Plaza Los Pinos",15],
+      ["Gerencia","Alex Balboa","Cromático",5], ["Gerencia","Alex Balboa","El Yugo",1],
+      ["Gerencia","Alex Balboa","ADM Y LOGISTICA",3.5],
+      ["Ingenieria","Daniel Mesa","Casas del Pinar 4",43], ["Ingenieria","Daniel Mesa","Chalinga",40],
+      ["Ingenieria","Daniel Mesa","Mirador Santa Teresita",38], ["Ingenieria","Daniel Mesa","GESTION Y VENTA",12],
+      ["Ingenieria","Daniel Mesa","Plaza Los Pinos",11], ["Ingenieria","Daniel Mesa","CAPACITACION",9],
+      ["Ingenieria","Daniel Mesa","Condell",6], ["Ingenieria","Daniel Mesa","Cromático",2],
+      ["Terreno","Martin Rodrigues","Terraza Santa Maria",131], ["Terreno","Martin Rodrigues","LIBRE",14.5],
+      ["Terreno","Martin Rodrigues","ADM Y LOGISTICA",13], ["Terreno","Martin Rodrigues","Casas del Pinar 4",4],
+      ["Terreno","Gonzalo Armijo","Terraza Santa Maria",131], ["Terreno","Gonzalo Armijo","LIBRE",14.5],
+      ["Terreno","Gonzalo Armijo","ADM Y LOGISTICA",13], ["Terreno","Gonzalo Armijo","Casas del Pinar 4",4]
+    ];
+    const rows = raw.map(([area,persona,proyecto,horas]) => ({area, persona, proyecto, horas, categoria: CAT_BY_PROYECTO[proyecto] || "Sin categoría"}));
+    const toSorted = (obj) => Object.entries(obj).sort((a,b)=>b[1]-a[1]);
+    const sumBy = (keyFn) => { const o={}; rows.forEach(r => { const k=keyFn(r); o[k]=(o[k]||0)+r.horas; }); return toSorted(o); };
+    const total = Math.round(rows.reduce((a,r)=>a+r.horas,0)*10)/10;
     return {
-      total:648.5, isDemo:true, periodo:"Agosto 2026",
-      porProyecto:[["Terraza Santa Maria",278],["GESTION Y VENTA",79.5],["Casas del Pinar 4",67.5],["Chalinga",60.5],["Mirador Santa Teresita",38],["Condell",26]],
-      porPersona:[["Martin Rodrigues",162.5],["Gonzalo Armijo",162.5],["Alex Balboa",162.5],["Daniel Mesa",161]],
-      porArea:[["Terreno",325],["Gerencia",162.5],["Ingenieria",161]],
-      porCategoria:[["Cliente_Interno",438.5],["Cliente_Externo",148.5],["Oficina_Central",61.5]],
-      porMes:[["Jun 2026",608],["Jul 2026",693],["Ago 2026",648.5]],
+      total, isDemo:true, periodo:"Agosto 2026",
+      porProyecto: sumBy(r=>r.proyecto), porPersona: sumBy(r=>r.persona), porArea: sumBy(r=>r.area), porCategoria: sumBy(r=>r.categoria),
+      porMes:[["Jun 2026",608],["Jul 2026",693],["Ago 2026",total]],
       ejecucion:[
         {name:"Condell", presupuesto:270, consumido:444},
         {name:"GESTION Y VENTA", presupuesto:120, consumido:127.5},
@@ -716,7 +839,8 @@
         {name:"Casas del Pinar 4", presupuesto:90, consumido:115.5},
         {name:"Chalinga", presupuesto:180, consumido:70.5},
         {name:"Raíces de Peñablanca", presupuesto:180, consumido:49}
-      ]
+      ],
+      rows
     };
   }
 
@@ -732,6 +856,7 @@
     $("demoBanner").hidden = state.snapshots.length > 0;
     renderKPIs(snap, cxc, hh);
     renderFlujo(snap);
+    renderProyectosDonuts(snap);
     renderProyectos(snap);
     renderCxC(cxc);
     renderHH(hh);
@@ -769,7 +894,7 @@
     const m = state.manifest[i];
     if (m.type === "panel") state.snapshots = state.snapshots.filter(s => s.fileName !== m.name);
     if (m.type === "cxc") { state.cxc = null; }
-    if (m.type === "hh") { state.hh = null; }
+    if (m.type === "hh") { state.hh = null; hhFilter.area = null; hhFilter.persona = null; }
     state.manifest.splice(i,1);
     state.activeSnapshot = Math.max(0, state.snapshots.length - 1);
     render();
@@ -847,6 +972,25 @@
     });
   }
 
+  // Vista por proyecto del Panel Financiero: distribución de presupuesto y gasto ejecutado,
+  // el mismo tipo de dona que Alex usa en Power BI para HH, aplicada acá a ingresos/costos.
+  function renderProyectosDonuts(snap){
+    const row = $("proyectosDonutRow"); row.innerHTML = "";
+    if (!snap.proyectos.length) return;
+    const presupuestoItems = snap.proyectos.filter(p => p.presupuesto > 0).map(p => [p.name, p.presupuesto]).sort((a,b)=>b[1]-a[1]);
+    const gastoItems = snap.proyectos.filter(p => p.gastoIG > 0).map(p => [p.name, p.gastoIG]).sort((a,b)=>b[1]-a[1]);
+    const moneyOpts = { formatValue: (v) => fmtMoney(v,{compact:true}), unitLabel: "" };
+    if (presupuestoItems.length){
+      const c1 = el("div", {class:"donut-card"}, [ el("h3",{text:"Presupuesto por proyecto"}) ]);
+      c1.appendChild(donutChart(presupuestoItems, moneyOpts));
+      row.appendChild(c1);
+    }
+    if (gastoItems.length){
+      const c2 = el("div", {class:"donut-card"}, [ el("h3",{text:"Gasto ejecutado (Of. Central) por proyecto"}) ]);
+      c2.appendChild(donutChart(gastoItems, moneyOpts));
+      row.appendChild(c2);
+    }
+  }
   function renderProyectos(snap){
     const grid = $("proyectosGrid"); grid.innerHTML = "";
     if (!snap.proyectos.length){ grid.appendChild(el("div", {class:"empty-note", text:"No encontré hojas de control de costo (CC-*) en este archivo."})); return; }
@@ -897,15 +1041,57 @@
   }
 
   function renderHH(hh){
-    const grid = $("hhGrid"); grid.innerHTML = "";
+    const areaTabs = $("hhAreaTabs"), chips = $("hhPersonaChips"), stat = $("hhContextStat"), donutRow = $("hhDonutRow"), grid = $("hhGrid");
+    areaTabs.innerHTML = ""; chips.innerHTML = ""; stat.textContent = ""; donutRow.innerHTML = ""; grid.innerHTML = "";
     if (!hh.porProyecto.length){ grid.appendChild(el("div",{class:"empty-note", text:"Sube el Excel de Horas Hombre (hoja \"Registro\", con columnas Persona, Proyecto y HH Trabajadas) para ver esta sección."})); return; }
-    const maxP = Math.max(...hh.porProyecto.map(x=>x[1]));
-    const c1 = el("div", {class:"hh-card"}, [ el("h3",{text:"Por proyecto"}) ]); hhBars(hh.porProyecto, maxP, c1);
-    grid.appendChild(c1);
-    if (hh.porPersona && hh.porPersona.length){ const maxPe = Math.max(...hh.porPersona.map(x=>x[1])); const c2 = el("div",{class:"hh-card"},[el("h3",{text:"Por persona"})]); hhBars(hh.porPersona, maxPe, c2); grid.appendChild(c2); }
-    if (hh.porArea.length){ const maxA = Math.max(...hh.porArea.map(x=>x[1])); const c3 = el("div",{class:"hh-card"},[el("h3",{text:"Por área"})]); hhBars(hh.porArea, maxA, c3); grid.appendChild(c3); }
-    if (hh.porCategoria.length){ const maxC = Math.max(...hh.porCategoria.map(x=>x[1])); const c4 = el("div",{class:"hh-card"},[el("h3",{text:"Por categoría de cliente"})]); hhBars(hh.porCategoria, maxC, c4); grid.appendChild(c4); }
-    if (hh.porMes && hh.porMes.length > 1){ const maxM = Math.max(...hh.porMes.map(x=>x[1])); const c5 = el("div",{class:"hh-card"},[el("h3",{text:"Por mes"})]); hhBars(hh.porMes, maxM, c5); grid.appendChild(c5); }
+
+    const hasRows = hh.rows && hh.rows.length > 0;
+    if (hasRows && hh.porArea.length){
+      // Vista por proyecto, al estilo del reporte de Power BI de Alex: un tab "Empresa total" +
+      // un tab por área (Gerencia/Ingeniería/Terreno); al elegir un área aparecen chips por persona,
+      // y las donas de abajo se recalculan sobre ese subconjunto sin volver a tocar el Excel.
+      const allTab = el("button", {class:"hh-filter-tab" + (!hhFilter.area ? " active" : ""), type:"button", text:"Empresa total"});
+      allTab.addEventListener("click", () => { hhFilter.area = null; hhFilter.persona = null; renderHH(hh); });
+      areaTabs.appendChild(allTab);
+      hh.porArea.forEach(([a]) => {
+        const tab = el("button", {class:"hh-filter-tab" + (hhFilter.area===a ? " active" : ""), type:"button", text:a});
+        tab.addEventListener("click", () => { hhFilter.area = (hhFilter.area===a ? null : a); hhFilter.persona = null; renderHH(hh); });
+        areaTabs.appendChild(tab);
+      });
+      if (hhFilter.area){
+        const personas = Array.from(new Set(hh.rows.filter(r => r.area===hhFilter.area).map(r => r.persona))).sort((a,b)=>a.localeCompare(b,"es"));
+        personas.forEach(p => {
+          const chip = el("button", {class:"hh-filter-chip" + (hhFilter.persona===p ? " active" : ""), type:"button", text:p});
+          chip.addEventListener("click", () => { hhFilter.persona = (hhFilter.persona===p ? null : p); renderHH(hh); });
+          chips.appendChild(chip);
+        });
+      }
+      const agg = hhAggregate(hh.rows, hhFilter.area, hhFilter.persona);
+      const label = hhFilter.persona || hhFilter.area || "Empresa total";
+      stat.textContent = label + " · " + fmtNum(agg.total,1) + " h" + (hh.periodo ? " · " + hh.periodo : "");
+
+      const c1 = el("div", {class:"donut-card"}, [ el("h3",{text:"Por proyecto"}) ]);
+      c1.appendChild(donutChart(agg.porProyecto));
+      donutRow.appendChild(c1);
+      const c2 = el("div", {class:"donut-card"}, [ el("h3",{text:"Por tipo de cliente"}) ]);
+      c2.appendChild(donutChart(agg.porCategoria));
+      donutRow.appendChild(c2);
+      if (!hhFilter.area && hh.porArea.length > 1){
+        const c3 = el("div", {class:"donut-card"}, [ el("h3",{text:"Por área"}) ]);
+        c3.appendChild(donutChart(hh.porArea));
+        donutRow.appendChild(c3);
+      }
+    } else {
+      // Sin detalle fila-a-fila (p.ej. formato plano de respaldo): donas fijas sobre los totales.
+      const c1 = el("div", {class:"donut-card"}, [ el("h3",{text:"Por proyecto"}) ]);
+      c1.appendChild(donutChart(hh.porProyecto));
+      donutRow.appendChild(c1);
+      if (hh.porCategoria.length){ const c2 = el("div",{class:"donut-card"},[el("h3",{text:"Por tipo de cliente"})]); c2.appendChild(donutChart(hh.porCategoria)); donutRow.appendChild(c2); }
+      if (hh.porArea.length){ const c3 = el("div",{class:"donut-card"},[el("h3",{text:"Por área"})]); c3.appendChild(donutChart(hh.porArea)); donutRow.appendChild(c3); }
+    }
+
+    if (hh.porPersona && hh.porPersona.length){ const maxPe = Math.max(...hh.porPersona.map(x=>x[1])); const c5 = el("div",{class:"hh-card"},[el("h3",{text:"Por persona"})]); hhBars(hh.porPersona, maxPe, c5); grid.appendChild(c5); }
+    if (hh.porMes && hh.porMes.length > 1){ const maxM = Math.max(...hh.porMes.map(x=>x[1])); const c6 = el("div",{class:"hh-card"},[el("h3",{text:"Por mes"})]); hhBars(hh.porMes, maxM, c6); grid.appendChild(c6); }
     if (hh.ejecucion && hh.ejecucion.length){
       const c6 = el("div", {class:"hh-card"}, [ el("h3",{text:"Ejecución HH vs. presupuesto"}) ]);
       hh.ejecucion.slice(0,7).forEach(p => {
@@ -947,6 +1133,7 @@
             if (parsed){
               parsed.fileName = file.name;
               state.hh = parsed;
+              hhFilter.area = null; hhFilter.persona = null; // nuevo archivo: limpiar el filtro de la vista por proyecto
               render();
             } else {
               state.manifest[state.manifest.length-1].type = "unknown";
