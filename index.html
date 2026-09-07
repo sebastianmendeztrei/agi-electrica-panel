@@ -159,6 +159,14 @@
   .bar-track{height:7px; border-radius:99px; background:var(--surface-2); margin:10px 0 4px; overflow:hidden; border:1px solid var(--line);}
   .bar-fill{height:100%; border-radius:99px;}
   .bar-label{display:flex; justify-content:space-between; font-size:11px; color:var(--ink-faint);}
+  .proy-partidas-toggle{margin-top:10px; width:100%; text-align:left; background:none; border:none; padding:6px 0 0; font-size:11.5px; color:var(--accent); cursor:pointer; border-top:1px dashed var(--line); font-family:inherit;}
+  .proy-partidas{display:none; margin-top:6px;}
+  .proy-partidas.open{display:block;}
+  .proy-partidas table{width:100%; border-collapse:collapse; font-size:11.5px;}
+  .proy-partidas th{text-align:left; color:var(--ink-faint); font-weight:600; padding:4px 6px; border-bottom:1px solid var(--line);}
+  .proy-partidas td{padding:4px 6px; color:var(--ink-muted); border-bottom:1px solid var(--line);}
+  .proy-partidas td:first-child{color:var(--ink);}
+  .proy-partidas td.num, .proy-partidas th:not(:first-child){text-align:right; font-family:"IBM Plex Mono",monospace;}
 
   .hh-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px;}
   .hh-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px 18px;}
@@ -481,15 +489,27 @@
     }
     if (headerRow === -1) return null;
     const totals = {presupuesto:0, proyeccion:0, resultado:0, utilidad:0};
+    const partidas = [];
     for (let r=headerRow+1; r<Math.min(headerRow+6, rows.length); r++){
       const row = rows[r];
       const label = String(row[0]||"").trim();
       if (!label) break;
-      totals.presupuesto += num(row[colMap.presupuesto]);
-      totals.proyeccion += num(row[colMap.proyeccion]);
-      totals.resultado += num(row[colMap.resultado]);
-      totals.utilidad += num(row[colMap.utilidad]);
+      const line = {
+        label,
+        presupuesto: num(row[colMap.presupuesto]),
+        proyeccion: num(row[colMap.proyeccion]),
+        resultado: num(row[colMap.resultado]),
+        utilidad: num(row[colMap.utilidad])
+      };
+      totals.presupuesto += line.presupuesto;
+      totals.proyeccion += line.proyeccion;
+      totals.resultado += line.resultado;
+      totals.utilidad += line.utilidad;
+      partidas.push(line);
     }
+    // Solo vale la pena mostrar el desglose si hay más de una partida — si la hoja
+    // trae una única fila (ya es el total), el desglose no aporta nada nuevo.
+    totals.partidas = partidas.length > 1 ? partidas : [];
     return totals;
   }
 
@@ -536,12 +556,30 @@
   }
 
   /* ================= parse: Cuentas por Cobrar ================= */
+  // Antigüedad de cartera: el export Softland trae, dentro del bloque de cada cliente, una
+  // tabla documento-a-documento (típicamente Fecha | Documento | Glosa | Debe | Haber | Saldo)
+  // que hoy solo se usaba para llegar a la fila "Total". Si esa tabla trae una columna "Fecha" y
+  // una columna "Saldo", las capturamos para poder clasificar cada documento por antigüedad
+  // (0-30 / 31-60 / 61-90 / +90 días desde su fecha). Es un cálculo oportunista: si el formato
+  // de un archivo no trae esas columnas en ese bloque, simplemente no se detecta nada y esta
+  // vista no aparece — no se inventa ni se estima ninguna fecha.
+  const AGING_BUCKETS = ["Al día (0-30d)", "31-60 días", "61-90 días", "Más de 90 días"];
+  function agingBucket(dias){
+    if (dias <= 30) return AGING_BUCKETS[0];
+    if (dias <= 60) return AGING_BUCKETS[1];
+    if (dias <= 90) return AGING_BUCKETS[2];
+    return AGING_BUCKETS[3];
+  }
   function parseCxC(wb){
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = aoa(ws);
     const clients = [];
     let current = null;
     let grandTotal = null;
+    let dateCol = null, saldoDocCol = null;
+    const todayMs = Date.now();
+    const buckets = {}; AGING_BUCKETS.concat("Sin fecha").forEach(k => buckets[k] = 0);
+    let anyAging = false;
     for (let r=0;r<rows.length;r++){
       const row = rows[r];
       const c0 = strip(row[0]);
@@ -549,8 +587,19 @@
         const nameIdx = row.findIndex(c => strip(c).indexOf("nombre") === 0);
         const codeVal = row[row.findIndex(c=>strip(c).indexOf("codigo")===0)+1];
         const nameVal = nameIdx > -1 ? row[nameIdx+1] : null;
-        current = { code: String(codeVal||"").trim(), name: String(nameVal||"").trim(), debe:0, haber:0, saldo:0, docs:0 };
+        current = { code: String(codeVal||"").trim(), name: String(nameVal||"").trim(), debe:0, haber:0, saldo:0, docs:0, docsDetalle:[] };
+        dateCol = null; saldoDocCol = null;
         continue;
+      }
+      if (current && dateCol == null && c0 !== "total"){
+        const cells = row.map(strip);
+        const fIdx = cells.findIndex(c => c.indexOf("fecha") > -1);
+        const sIdx = cells.findIndex(c => c.indexOf("saldo") > -1);
+        if (fIdx > -1 && sIdx > -1){ dateCol = fIdx; saldoDocCol = sIdx; }
+      } else if (current && dateCol != null && c0 !== "total" && c0){
+        const fecha = excelSerialToDate(row[dateCol]);
+        const saldoDoc = num(row[saldoDocCol]);
+        if (fecha && saldoDoc) current.docsDetalle.push({fecha, saldo: saldoDoc});
       }
       if (current && c0 === "total"){
         const rest = row.slice(1).map(v=>String(v).trim()).filter(Boolean);
@@ -560,8 +609,20 @@
             current.saldo = nonZero[nonZero.length-1].v;
             current.debe = nonZero[0].v;
           }
+          if (current.docsDetalle.length){
+            anyAging = true;
+            let peorDias = 0;
+            current.docsDetalle.forEach(d => {
+              const dias = Math.floor((todayMs - d.fecha.getTime()) / 86400000);
+              if (dias > peorDias) peorDias = dias;
+              buckets[agingBucket(dias)] += d.saldo;
+            });
+            current.diasMora = peorDias;
+          } else {
+            buckets["Sin fecha"] += current.saldo;
+          }
           clients.push(current);
-          current = null;
+          current = null; dateCol = null; saldoDocCol = null;
         }
       }
       if (row.some(c => strip(c) === "total:")){
@@ -570,7 +631,12 @@
       }
     }
     clients.sort((a,b)=> b.saldo - a.saldo);
-    return { clients, grandTotal: grandTotal != null ? grandTotal : clients.reduce((a,c)=>a+c.saldo,0) };
+    return {
+      clients,
+      grandTotal: grandTotal != null ? grandTotal : clients.reduce((a,c)=>a+c.saldo,0),
+      hasAging: anyAging,
+      buckets
+    };
   }
 
   /* ================= parse: Horas Hombre ================= */
@@ -785,19 +851,40 @@
         flujoAcumulado:{label:"FLUJO DE CAJA ACUMULADO", values:flujoAcc, total:flujoAcc[11]}
       },
       proyectos: [
-        {name:"Raíces de Peñablanca", presupuesto:1008656185, proyeccion:993656185, resultado:15000000, utilidad:15000000, gastoIG:735000000},
-        {name:"Condell", presupuesto:301146274, proyeccion:268825587, resultado:32320687, utilidad:32320687, gastoIG:255000000},
-        {name:"Terraza Santa María", presupuesto:58991688, proyeccion:51681164, resultado:7310523, utilidad:7310523, gastoIG:49500000},
-        {name:"Cumbres del Pinar 4", presupuesto:155749454, proyeccion:121728795, resultado:34020659, utilidad:34020659, gastoIG:131000000}
+        {name:"Raíces de Peñablanca", presupuesto:1008656185, proyeccion:993656185, resultado:15000000, utilidad:15000000, gastoIG:735000000,
+          partidas:[
+            {label:"Obra Gruesa", presupuesto:453895283, proyeccion:447145283, resultado:6750000, utilidad:6750000},
+            {label:"Instalaciones Eléctricas", presupuesto:302596856, proyeccion:298096856, resultado:4500000, utilidad:4500000},
+            {label:"Terminaciones", presupuesto:151298328, proyeccion:149048328, resultado:2250000, utilidad:2250000},
+            {label:"Gastos Generales", presupuesto:100865718, proyeccion:99365718, resultado:1500000, utilidad:1500000}
+          ]},
+        {name:"Condell", presupuesto:301146274, proyeccion:268825587, resultado:32320687, utilidad:32320687, gastoIG:255000000,
+          partidas:[
+            {label:"Obra Gruesa", presupuesto:150573137, proyeccion:134412793, resultado:16160343, utilidad:16160343},
+            {label:"Instalaciones Eléctricas", presupuesto:90343882, proyeccion:80647676, resultado:9696206, utilidad:9696206},
+            {label:"Terminaciones", presupuesto:60229255, proyeccion:53765118, resultado:6464138, utilidad:6464138}
+          ]},
+        {name:"Terraza Santa María", presupuesto:58991688, proyeccion:51681164, resultado:7310523, utilidad:7310523, gastoIG:49500000,
+          partidas:[
+            {label:"Obra Gruesa", presupuesto:35395013, proyeccion:31008698, resultado:4386314, utilidad:4386314},
+            {label:"Instalaciones Eléctricas", presupuesto:23596675, proyeccion:20672466, resultado:2924209, utilidad:2924209}
+          ]},
+        {name:"Cumbres del Pinar 4", presupuesto:155749454, proyeccion:121728795, resultado:34020659, utilidad:34020659, gastoIG:131000000,
+          partidas:[
+            {label:"Obra Gruesa", presupuesto:77874727, proyeccion:60864398, resultado:17010330, utilidad:17010330},
+            {label:"Instalaciones Eléctricas", presupuesto:46724836, proyeccion:36518639, resultado:10206198, utilidad:10206198},
+            {label:"Terminaciones", presupuesto:31149891, proyeccion:24345758, resultado:6804132, utilidad:6804132}
+          ]}
       ]
     };
   }
   function demoCxC(){
     return { clients:[
-      {code:"76100769", name:"OBRAS CIVILES SANTA MARIA SPA", saldo:6474762},
-      {code:"77937241", name:"INGENIERIA EL PEUMO LIMITADA", saldo:4538805},
-      {code:"77564053", name:"PARQUE CALAFQUÉN SPA", saldo:472777}
-    ].sort((a,b)=>b.saldo-a.saldo), grandTotal: 11486344, isDemo:true };
+      {code:"76100769", name:"OBRAS CIVILES SANTA MARIA SPA", saldo:6474762, diasMora:18},
+      {code:"77937241", name:"INGENIERIA EL PEUMO LIMITADA", saldo:4538805, diasMora:45},
+      {code:"77564053", name:"PARQUE CALAFQUÉN SPA", saldo:472777, diasMora:97}
+    ].sort((a,b)=>b.saldo-a.saldo), grandTotal: 11486344, isDemo:true, hasAging:true,
+      buckets: {"Al día (0-30d)":6474762, "31-60 días":4538805, "61-90 días":0, "Más de 90 días":472777, "Sin fecha":0} };
   }
   function demoHH(){
     // Datos de ejemplo modelados sobre el mismo reporte de Power BI de Alex ("Reporte de rendimiento
@@ -1013,18 +1100,66 @@
         card.appendChild(track);
         card.appendChild(el("div", {class:"bar-label"}, [ el("span",{text:"Ejecutado " + pct(ratio) + " (Of. Central)"}), el("span",{text: ratio>1 ? "sobre presupuesto" : ""}) ]));
       }
+      if (p.partidas && p.partidas.length){
+        const detail = el("div", {class:"proy-partidas"});
+        const toggle = el("button", {class:"proy-partidas-toggle", type:"button", text:"Ver detalle por partida (" + p.partidas.length + ") ▾"});
+        toggle.addEventListener("click", () => {
+          const open = detail.classList.toggle("open");
+          toggle.textContent = "Ver detalle por partida (" + p.partidas.length + ") " + (open ? "▴" : "▾");
+        });
+        let rows = "";
+        p.partidas.forEach(part => {
+          rows += `<tr><td>${part.label}</td><td class="num">${fmtMoney(part.presupuesto,{compact:true})}</td><td class="num">${fmtMoney(part.resultado,{compact:true})}</td></tr>`;
+        });
+        detail.innerHTML = `<table><thead><tr><th>Partida</th><th>Presupuesto</th><th>Resultado</th></tr></thead><tbody>${rows}</tbody></table>`;
+        card.appendChild(toggle);
+        card.appendChild(detail);
+      }
       grid.appendChild(card);
     });
   }
 
+  function agingSeverityClass(bucketLabel){
+    if (bucketLabel === "Al día (0-30d)") return "good";
+    if (bucketLabel === "31-60 días") return "warning";
+    return "critical"; // 61-90 y +90: mismo tono de riesgo alto, distinguibles por el monto y la etiqueta
+  }
+  function renderCxCAging(cxc){
+    if (!cxc.hasAging) return null;
+    const total = Object.values(cxc.buckets).reduce((a,b)=>a+b,0);
+    if (!total) return null;
+    const card = el("div", {class:"hh-card", style:"margin-bottom:16px;"}, [ el("h3",{text:"Antigüedad de cartera (por fecha de documento)"}) ]);
+    AGING_BUCKETS.concat("Sin fecha").forEach(label => {
+      const val = cxc.buckets[label] || 0;
+      if (!val) return;
+      const sev = label === "Sin fecha" ? null : agingSeverityClass(label);
+      const item = el("div", {class:"hh-item"}, [
+        el("span", {class:"hh-name", text:label, title:label}),
+        el("span", {class:"hh-track"}, [ el("span", {class:"hh-fill"}) ]),
+        el("span", {class:"hh-val", text:fmtMoney(val,{compact:true})})
+      ]);
+      const fill = item.querySelector(".hh-fill");
+      fill.style.width = (total ? val/total*100 : 0) + "%";
+      if (sev) fill.style.background = "var(--" + sev + ")";
+      card.appendChild(item);
+    });
+    card.appendChild(el("div", {class:"bar-label", style:"margin-top:6px;"}, [ el("span",{text:"Clasificado por fecha del documento más antiguo de cada cliente. Sin fecha: bloques donde el archivo no trae columna de fecha detectable."}) ]));
+    return card;
+  }
   function renderCxC(cxc){
     const wrap = $("cxcWrap"); wrap.innerHTML = "";
     if (!cxc.clients.length){ wrap.appendChild(el("div",{class:"empty-note", text:"Sube el Excel de Cuentas por Cobrar para ver esta sección."})); return; }
+    const aging = renderCxCAging(cxc);
+    if (aging) wrap.appendChild(aging);
     const table = el("div", {class:"table-wrap"});
     let rows = "";
-    cxc.clients.forEach(c => { rows += `<tr><td>${c.name}</td><td class="num">${c.code||""}</td><td class="num">${fmtMoney(c.saldo)}</td></tr>`; });
-    table.innerHTML = `<table><thead><tr><th>Cliente</th><th>Código</th><th>Saldo</th></tr></thead><tbody>${rows}
-      <tr class="total-row"><td>Total</td><td></td><td class="num">${fmtMoney(cxc.grandTotal)}</td></tr></tbody></table>`;
+    cxc.clients.forEach(c => {
+      const pctTotal = cxc.grandTotal ? c.saldo/cxc.grandTotal : 0;
+      const mora = c.diasMora != null ? c.diasMora + " d" : "—";
+      rows += `<tr><td>${c.name}</td><td class="num">${c.code||""}</td><td class="num">${fmtMoney(c.saldo)}</td><td class="num">${pct(pctTotal)}</td><td class="num">${mora}</td></tr>`;
+    });
+    table.innerHTML = `<table><thead><tr><th>Cliente</th><th>Código</th><th>Saldo</th><th>% del total</th><th>Antigüedad</th></tr></thead><tbody>${rows}
+      <tr class="total-row"><td>Total</td><td></td><td class="num">${fmtMoney(cxc.grandTotal)}</td><td class="num">100%</td><td></td></tr></tbody></table>`;
     wrap.appendChild(table);
   }
 
