@@ -61,13 +61,25 @@
     background-size: auto, auto, 42px 42px, 42px 42px;
     background-attachment: fixed;
     color:var(--ink); font-family:"IBM Plex Sans",system-ui,sans-serif; line-height:1.45;
+    overflow-x:hidden;
+  }
+
+  .bg-bolt{
+    position:fixed; top:50%; right:-8%; transform:translateY(-50%) rotate(-6deg);
+    width:min(78vw, 980px); height:min(78vw, 980px); z-index:0; pointer-events:none;
+    color:var(--accent); opacity:.05;
+    filter:drop-shadow(0 0 140px rgba(58,160,255,.45));
+  }
+  .bg-bolt svg{width:100%; height:100%; display:block;}
+  @media (max-width:820px){
+    .bg-bolt{ right:-22%; width:min(120vw, 780px); height:min(120vw, 780px); opacity:.045; }
   }
   h1,h2,h3{font-weight:650; text-wrap:balance; margin:0;}
   .num, .tabular{font-family:"IBM Plex Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums;}
   a{color:var(--accent);}
   ::selection{background:var(--accent-soft);}
 
-  .shell{max-width:1180px; margin:0 auto; padding:0 20px 64px;}
+  .shell{max-width:1180px; margin:0 auto; padding:0 20px 64px; position:relative; z-index:1;}
 
   /* ---------- topbar ---------- */
   .topbar{
@@ -209,6 +221,8 @@
 </head>
 <body>
 
+<div class="bg-bolt" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/></svg></div>
+
 <div class="shell" id="app">
 
   <header class="topbar">
@@ -239,6 +253,7 @@
       <div class="panel-head"><h2>Control de costos por proyecto</h2><span class="src" id="srcProyectos"></span></div>
       <div class="donut-row" id="proyectosDonutRow"></div>
       <div class="proyectos-grid" id="proyectosGrid"></div>
+      <div class="bar-label" id="proyectosNote" style="margin-top:12px;">Presupuesto y "Ejecutado" (gasto real de Of. Central) son cifras reales. "Proyección (modelo de Alex)" y "Costo proyectado a cierre" son la estimación de cómo debería terminar cada proyecto según el modelo de Alex, no un resultado ya cerrado.</div>
     </section>
 
     <section class="panel">
@@ -1000,7 +1015,7 @@
     const sumBy = (keyFn) => { const o={}; rows.forEach(r => { const k=keyFn(r); o[k]=(o[k]||0)+r.horas; }); return toSorted(o); };
     const total = Math.round(rows.reduce((a,r)=>a+r.horas,0)*10)/10;
     // Horas reales por persona y por mes, desde "Control_HH_Proyectos.Rev2.xlsx" (hoja Registro,
-    // 412 filas), leído vía SharePoint el 08-09-2026 — mismos totales mensuales ya verificados
+    // 412 filas), leída vía SharePoint el 08-09-2026 — mismos totales mensuales ya verificados
     // antes (Jun 608,1 · Jul 693,0 · Ago 648,5 h), ahora desagregados por persona a pedido de Alex.
     const PERSONAS_ORDEN = ["Alex Balboa","Daniel Mesa","Martin Rodrigues","Gonzalo Armijo"];
     const porMesPersona = [
@@ -1199,7 +1214,9 @@
   }
   function renderProyectos(snap){
     const grid = $("proyectosGrid"); grid.innerHTML = "";
-    if (!snap.proyectos.length){ grid.appendChild(el("div", {class:"empty-note", text:"No encontré hojas de control de costo (CC-*) en este archivo."})); return; }
+    const noteEl = $("proyectosNote");
+    if (!snap.proyectos.length){ grid.appendChild(el("div", {class:"empty-note", text:"No encontré hojas de control de costo (CC-*) en este archivo."})); if (noteEl) noteEl.hidden = true; return; }
+    if (noteEl) noteEl.hidden = false;
     snap.proyectos.forEach(p => {
       const ratio = p.gastoIG != null && p.presupuesto ? p.gastoIG/p.presupuesto : null;
       const status = ratio == null ? null : ratio > 1 ? "critical" : ratio > 0.85 ? "warning" : "good";
@@ -1207,8 +1224,8 @@
       const card = el("div", {class:"proy-card"}, [
         el("div", {class:"proy-head"}, [ el("span",{class:"proy-dot"}), el("h3",{text:p.name}) ]),
         el("div", {class:"proy-row"}, [ el("span",{text:"Presupuesto"}), el("b",{text:fmtMoney(p.presupuesto,{compact:true})}) ]),
-        el("div", {class:"proy-row"}, [ el("span",{text:"Proyección"}), el("b",{text:fmtMoney(p.proyeccion,{compact:true})}) ]),
-        el("div", {class:"proy-row"}, [ el("span",{text:"Resultado"}), el("b",{text:fmtMoney(p.resultado,{compact:true})}) ]),
+        el("div", {class:"proy-row"}, [ el("span",{text:"Proyección (modelo de Alex)"}), el("b",{text:fmtMoney(p.proyeccion,{compact:true})}) ]),
+        el("div", {class:"proy-row"}, [ el("span",{text:"Costo proyectado a cierre"}), el("b",{text:fmtMoney(p.resultado,{compact:true})}) ]),
       ]);
       card.querySelector(".proy-dot").style.background = color;
       if (ratio != null){
@@ -1230,7 +1247,7 @@
         p.partidas.forEach(part => {
           rows += `<tr><td>${part.label}</td><td class="num">${fmtMoney(part.presupuesto,{compact:true})}</td><td class="num">${fmtMoney(part.resultado,{compact:true})}</td></tr>`;
         });
-        detail.innerHTML = `<table><thead><tr><th>Partida</th><th>Presupuesto</th><th>Resultado</th></tr></thead><tbody>${rows}</tbody></table>`;
+        detail.innerHTML = `<table><thead><tr><th>Partida</th><th>Presupuesto</th><th>Costo proy.</th></tr></thead><tbody>${rows}</tbody></table>`;
         card.appendChild(toggle);
         card.appendChild(detail);
       }
