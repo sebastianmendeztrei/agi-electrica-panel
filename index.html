@@ -1015,7 +1015,7 @@
     const sumBy = (keyFn) => { const o={}; rows.forEach(r => { const k=keyFn(r); o[k]=(o[k]||0)+r.horas; }); return toSorted(o); };
     const total = Math.round(rows.reduce((a,r)=>a+r.horas,0)*10)/10;
     // Horas reales por persona y por mes, desde "Control_HH_Proyectos.Rev2.xlsx" (hoja Registro,
-    // 412 filas), leída vía SharePoint el 08-09-2026 — mismos totales mensuales ya verificados
+    // 412 filas), leído vía SharePoint el 08-09-2026 — mismos totales mensuales ya verificados
     // antes (Jun 608,1 · Jul 693,0 · Ago 648,5 h), ahora desagregados por persona a pedido de Alex.
     const PERSONAS_ORDEN = ["Alex Balboa","Daniel Mesa","Martin Rodrigues","Gonzalo Armijo"];
     const porMesPersona = [
