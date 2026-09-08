@@ -208,8 +208,9 @@
       <div class="chart-card">
         <div class="legend">
           <span><i style="background:var(--good)"></i>Ingresos</span>
-          <span><i style="background:var(--ink-faint)"></i>Egresos</span>
+          <span><i style="background:var(--warning)"></i>Egresos</span>
           <span><i style="background:var(--accent)"></i>Flujo acumulado</span>
+          <span><i style="background:var(--proj-cdp4)"></i>Ganancia mensual (sólido = real, punteado = proyectado por Alex)</span>
         </div>
         <svg id="flujoChart" width="100%" viewBox="0 0 1120 320" preserveAspectRatio="xMidYMid meet"></svg>
       </div>
@@ -224,6 +225,11 @@
     <section class="panel">
       <div class="panel-head"><h2>Cuentas por cobrar</h2><span class="src" id="srcCxc"></span></div>
       <div id="cxcWrap"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Ventas facturadas</h2><span class="src" id="srcVentas"></span></div>
+      <div id="ventasWrap"></div>
     </section>
 
     <section class="panel">
@@ -379,6 +385,7 @@
     snapshots: [demoSnapshotJun(), demoSnapshotJul(), demoSnapshot()], // uno por archivo "Panel financiero Total" mensual (Junio, Julio, Agosto 2026)
     activeSnapshot: 2, // Agosto 2026 (mes más reciente) por defecto
     cxc: null, cxcIsDemo: true,
+    ventas: null, ventasIsDemo: true,
     hh: null, hhIsDemo: true,
     manifest: []           // {name, type, note}
   };
@@ -612,6 +619,18 @@
     "martin rodrigues":"Terreno", "gonzalo armijo":"Terreno",
     "daniel mesa":"Ingenieria", "alex balboa":"Gerencia"
   };
+  // Tarifa de costo por hora, hoja "Variables" del Excel financiero AGI ("Costos Empresa M.O."),
+  // en UF. Esa tabla trae la tarifa por ROL (Grte. Operación / Ing. Proyectista / Técnico
+  // Eléctrico ×2), no por persona con nombre — el cruce persona→rol de abajo es una inferencia
+  // nuestra a partir del área ya clasificada en PERSON_AREA (Gerencia→Grte. Operación,
+  // Ingeniería→Ing. Proyectista, Terreno→Técnico Eléctrico, que es literalmente el mismo rol
+  // repetido dos veces en la hoja de Alex para los dos de Terreno), no un dato que Alex
+  // confirmara persona por persona. Vale la pena que él lo confirme antes de usarlo para algo
+  // más que referencia interna.
+  const ROLE_HOURLY_RATE_UF = { "Gerencia":0.8333333333333334, "Ingenieria":0.19803571428571431, "Terreno":0.25336309523809525 };
+  const ROLE_LABEL = { "Gerencia":"Grte. Operación", "Ingenieria":"Ing. Proyectista", "Terreno":"Técnico Eléctrico" };
+  const VALOR_UF_REF = 40873.77; // UF al 31-08-2026, hoja INICIO del Excel financiero de agosto — valor de referencia, no UF del día.
+  const VALOR_UF_REF_FECHA = "31-08-2026";
   function excelSerialToDate(v){
     if (v instanceof Date) return isNaN(v) ? null : v;
     if (typeof v === "string"){
@@ -888,12 +907,49 @@
     };
   }
   function demoCxC(){
+    // Fuente: "Clientes y Ventas Total 2026.xlsx" (hoja Clientes, export Softland, corte 07-09-2026),
+    // enviado por Alex el 08-09-2026. Reemplaza el corte anterior (que no traía a VCB Constructora).
+    // Días de mora recalculados al momento de cargar la página, usando la fecha de emisión de cada
+    // factura (mismo criterio que ya usaba el parser en vivo para este mismo formato de archivo).
     return { clients:[
-      {code:"76100769", name:"OBRAS CIVILES SANTA MARIA SPA", saldo:6474762, diasMora:18},
-      {code:"77937241", name:"INGENIERIA EL PEUMO LIMITADA", saldo:4538805, diasMora:45},
-      {code:"77564053", name:"PARQUE CALAFQUÉN SPA", saldo:472777, diasMora:97}
-    ].sort((a,b)=>b.saldo-a.saldo), grandTotal: 11486344, isDemo:true, hasAging:true,
-      buckets: {"Al día (0-30d)":6474762, "31-60 días":4538805, "61-90 días":0, "Más de 90 días":472777, "Sin fecha":0} };
+      {code:"76689694", name:"VCB CONSTRUCTORA SPA", saldo:12692562, diasMora:13},
+      {code:"76100769", name:"OBRAS CIVILES SANTA MARIA SPA", saldo:6474762, diasMora:120},
+      {code:"77937241", name:"INGENIERIA EL PEUMO LIMITADA", saldo:4538805, diasMora:133},
+      {code:"77564053", name:"PARQUE CALAFQUÉN SPA", saldo:472777, diasMora:229}
+    ].sort((a,b)=>b.saldo-a.saldo), grandTotal: 24178906, isDemo:true, hasAging:true, fileName:"Clientes y Ventas Total 2026.xlsx",
+      buckets: {"Al día (0-30d)":12692562, "31-60 días":0, "61-90 días":0, "Más de 90 días":11486344, "Sin fecha":0} };
+  }
+  function demoVentas(){
+    // Fuente: "Clientes y Ventas Total 2026.xlsx" (hoja Ventas), enviado por Alex el 08-09-2026.
+    // OJO: la fila "Total" de esa hoja trae 46.874.498, pero no cuadra con la suma de las 13
+    // facturas listadas debajo (45.288.917) ni con Neto+IVA de esas mismas filas — parece un
+    // total desactualizado (quizás quedó de una versión con una factura más). Este panel muestra
+    // el total recalculado desde las 13 facturas reales, no el de la celda del Excel.
+    const facturas = [
+      {fecha:"04-01-2026", factura:"FV-6 PARQUE CALAFQUEN", neto:397292, iva:75485, total:472777},
+      {fecha:"23-03-2026", factura:"FV-7 VCB CONSTRUCTORA", neto:6844566, iva:1300468, total:8145034},
+      {fecha:"07-04-2026", factura:"FV-8 VICTOR MADRID EIRL", neto:1339080, iva:254425, total:1593505},
+      {fecha:"28-04-2026", factura:"FV-9 INGENIERIA EL PEUMO LTDA", neto:1896828, iva:360397, total:2257225},
+      {fecha:"06-05-2026", factura:"FV-16 OBRAS CIVILES SANTA MARIA SPA", neto:3294388, iva:625934, total:3920322},
+      {fecha:"11-05-2026", factura:"FV-17 OBRAS CIVILES SANTA MARIA", neto:2146588, iva:407852, total:2554440},
+      {fecha:"11-05-2026", factura:"FV-18 OBRAS CIVILES SANTA MARIA", neto:1549732, iva:294449, total:1844181},
+      {fecha:"26-05-2026", factura:"FV-19 ING EL PEUMO", neto:1917294, iva:364286, total:2281580},
+      {fecha:"27-05-2026", factura:"FV-20 JOSE MIGUEL ARAYA CONTRERAS", neto:1528104, iva:290340, total:1818444},
+      {fecha:"15-06-2026", factura:"FV-21 INMOBILIARIA Q11", neto:5138943, iva:976399, total:6115342},
+      {fecha:"31-07-2026", factura:"FV-23 VICTOR ITURRIETA MADRID", neto:1339080, iva:254425, total:1593505},
+      {fecha:"31-08-2026", factura:"FV-24 VCB CONSTRUCTORA", neto:6693865, iva:1271834, total:7965699},
+      {fecha:"31-08-2026", factura:"FV-25 VCB CONSTRUCTORA", neto:3972154, iva:754709, total:4726863}
+    ];
+    const totalNeto = facturas.reduce((a,f)=>a+f.neto,0);
+    const totalIva = facturas.reduce((a,f)=>a+f.iva,0);
+    const totalFacturado = facturas.reduce((a,f)=>a+f.total,0);
+    const porMes = {};
+    facturas.forEach(f => {
+      const [d,m,y] = f.fecha.split("-");
+      const key = MONTH_LABELS[+m-1] + " " + y;
+      porMes[key] = (porMes[key]||0) + f.total;
+    });
+    return { facturas, totalNeto, totalIva, totalFacturado, porMes: Object.entries(porMes), isDemo:true, fileName:"Clientes y Ventas Total 2026.xlsx", totalExcelNoCuadra: 46874498 };
   }
   function demoHH(){
     // Datos de ejemplo modelados sobre el mismo reporte de Power BI de Alex ("Reporte de rendimiento
@@ -924,10 +980,33 @@
     const toSorted = (obj) => Object.entries(obj).sort((a,b)=>b[1]-a[1]);
     const sumBy = (keyFn) => { const o={}; rows.forEach(r => { const k=keyFn(r); o[k]=(o[k]||0)+r.horas; }); return toSorted(o); };
     const total = Math.round(rows.reduce((a,r)=>a+r.horas,0)*10)/10;
+    // Horas reales por persona y por mes, desde "Control_HH_Proyectos.Rev2.xlsx" (hoja Registro,
+    // 412 filas), leído vía SharePoint el 08-09-2026 — mismos totales mensuales ya verificados
+    // antes (Jun 608,1 · Jul 693,0 · Ago 648,5 h), ahora desagregados por persona a pedido de Alex.
+    const PERSONAS_ORDEN = ["Alex Balboa","Daniel Mesa","Martin Rodrigues","Gonzalo Armijo"];
+    const porMesPersona = [
+      { mes:"Jun 2026", horas:{"Alex Balboa":175.6,"Daniel Mesa":149.5,"Martin Rodrigues":141.5,"Gonzalo Armijo":141.5} },
+      { mes:"Jul 2026", horas:{"Alex Balboa":191.0,"Daniel Mesa":168.0,"Martin Rodrigues":167.0,"Gonzalo Armijo":167.0} },
+      { mes:"Ago 2026", horas:{"Alex Balboa":162.5,"Daniel Mesa":161.0,"Martin Rodrigues":162.5,"Gonzalo Armijo":162.5} }
+    ];
+    // Costo por persona (Jun-Ago): tarifa por rol (ver ROLE_HOURLY_RATE_UF) × horas reales de arriba.
+    const costoPersona = PERSONAS_ORDEN.map(persona => {
+      const area = PERSON_AREA[strip(persona)];
+      const valorHoraUF = ROLE_HOURLY_RATE_UF[area];
+      const horasTotal = porMesPersona.reduce((a,m) => a + (m.horas[persona]||0), 0);
+      const costoUF = horasTotal * valorHoraUF;
+      return {
+        persona, area, rol: ROLE_LABEL[area],
+        valorHoraUF, valorHoraCLP: valorHoraUF * VALOR_UF_REF,
+        horasTotal: Math.round(horasTotal*10)/10,
+        costoUF: Math.round(costoUF*100)/100, costoCLP: Math.round(costoUF * VALOR_UF_REF)
+      };
+    });
     return {
       total, isDemo:true, periodo:"Agosto 2026",
       porProyecto: sumBy(r=>r.proyecto), porPersona: sumBy(r=>r.persona), porArea: sumBy(r=>r.area), porCategoria: sumBy(r=>r.categoria),
       porMes:[["Jun 2026",608],["Jul 2026",693],["Ago 2026",total]],
+      porMesPersona, personasOrden: PERSONAS_ORDEN, costoPersona,
       ejecucion:[
         {name:"Condell", presupuesto:270, consumido:444},
         {name:"GESTION Y VENTA", presupuesto:120, consumido:127.5},
@@ -947,16 +1026,19 @@
     renderTabs();
     const snap = activeSnap();
     const cxc = state.cxc || demoCxC();
+    const ventas = state.ventas || demoVentas();
     const hh = state.hh || demoHH();
     renderKPIs(snap, cxc, hh);
     renderFlujo(snap);
     renderProyectosDonuts(snap);
     renderProyectos(snap);
     renderCxC(cxc);
+    renderVentas(ventas);
     renderHH(hh);
     $("srcFlujo").textContent = "hoja: Resumen General — " + (snap.fileName || "");
     $("srcProyectos").textContent = "hojas: CC-* / IG-* — " + (snap.fileName || "");
     $("srcCxc").textContent = cxc.fileName || "AGI_Clientes";
+    $("srcVentas").textContent = ventas.fileName || "Clientes y Ventas Total 2026";
     $("srcHh").textContent = hh.fileName || "Control_HH_Proyectos";
     $("lastUpdated").textContent = "Vista: " + (snap.label || "") + " · " + new Date().toLocaleString("es-CL");
   }
@@ -1001,6 +1083,15 @@
     row.appendChild(kpiCard("Horas hombre" + (hh.periodo ? " · " + hh.periodo : ""), fmtNum(hh.total,1) + " h", hh.porProyecto.length + " proyectos con registro"));
   }
 
+  // Mes (0-indexado) del propio snapshot, a partir de su label ("Agosto 2026" → 7). Los meses
+  // hasta ese índice son el real ya cerrado por Alex ese mes; los posteriores son la proyección
+  // que el propio Excel de Alex ya trae para el resto del año (columna "RESULTADO NETO
+  // PROYECTADO" / el resto de Resumen General) — no una estimación nuestra por tendencia.
+  const MES_NOMBRE_IDX = {"enero":0,"febrero":1,"marzo":2,"abril":3,"mayo":4,"junio":5,"julio":6,"agosto":7,"septiembre":8,"octubre":9,"noviembre":10,"diciembre":11};
+  function snapMonthIndex(snap){
+    const m = strip(snap.label||"").match(/^([a-z]+)/);
+    return (m && MES_NOMBRE_IDX[m[1]] != null) ? MES_NOMBRE_IDX[m[1]] : 11;
+  }
   function renderFlujo(snap){
     const svg = $("flujoChart");
     svg.innerHTML = "";
@@ -1011,24 +1102,33 @@
     }
     const ing = snap.resumen.totalIngresos.values, egr = snap.resumen.totalEgresos.values;
     const flujoAcc = snap.resumen.flujoAcumulado ? snap.resumen.flujoAcumulado.values : (() => { let a=0; return ing.map((v,i)=>a+=(v-egr[i])); })();
+    const ganancia = ing.map((v,i) => v - egr[i]);
+    const cutoff = snapMonthIndex(snap); // último mes "real" de este snapshot
     const W = 1120, H = 320, padL = 56, padR = 16, padT = 16, padB = 34;
     const plotW = W - padL - padR, plotH = H - padT - padB;
     const maxBar = Math.max(1, ...ing, ...egr);
     const minAcc = Math.min(0, ...flujoAcc), maxAcc = Math.max(1, ...flujoAcc);
+    const minGan = Math.min(0, ...ganancia), maxGan = Math.max(1, ...ganancia);
     const n = 12, gw = plotW / n;
-    const yBar = (v) => padT + plotH - (v/maxBar)*plotH*0.62;
     const yLine = (v) => padT + plotH - ((v-minAcc)/(maxAcc-minAcc || 1))*plotH;
+    const yGan = (v) => padT + plotH - ((v-minGan)/(maxGan-minGan || 1))*plotH;
 
     let svgHtml = "";
     // gridlines
     for (let g=0; g<=4; g++){ const y = padT + plotH*g/4; svgHtml += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="var(--line)" stroke-width="1"/>`; }
+    // separador real / proyectado
+    if (cutoff < 11){
+      const xDiv = padL + (cutoff+1)*gw;
+      svgHtml += `<line x1="${xDiv.toFixed(1)}" y1="${padT}" x2="${xDiv.toFixed(1)}" y2="${padT+plotH}" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="2 3"/>`;
+      svgHtml += `<text x="${(xDiv+4).toFixed(1)}" y="${padT+11}" font-size="10" fill="var(--ink-faint)" font-family="IBM Plex Sans">proyectado →</text>`;
+    }
     MONTH_LABELS.forEach((mLabel,i) => {
       const x0 = padL + i*gw;
       const bw = gw*0.30;
       const hI = plotH*0.62*(ing[i]/maxBar), hE = plotH*0.62*(egr[i]/maxBar);
       const xI = x0 + gw*0.16, xE = x0 + gw*0.54;
       svgHtml += `<rect data-t="ing-${i}" x="${xI}" y="${padT+plotH-hI}" width="${bw}" height="${Math.max(hI,0.5)}" rx="2.5" fill="var(--good)"/>`;
-      svgHtml += `<rect data-t="egr-${i}" x="${xE}" y="${padT+plotH-hE}" width="${bw}" height="${Math.max(hE,0.5)}" rx="2.5" fill="var(--ink-faint)"/>`;
+      svgHtml += `<rect data-t="egr-${i}" x="${xE}" y="${padT+plotH-hE}" width="${bw}" height="${Math.max(hE,0.5)}" rx="2.5" fill="var(--warning)"/>`;
       svgHtml += `<text x="${x0+gw/2}" y="${H-10}" text-anchor="middle" font-size="11" fill="var(--ink-faint)" font-family="IBM Plex Mono">${mLabel}</text>`;
     });
     // acumulado line
@@ -1036,12 +1136,23 @@
     const pathD = pts.map((p,i) => (i===0?"M":"L") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
     svgHtml += `<path d="${pathD}" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
     pts.forEach((p,i) => { svgHtml += `<circle data-t="acc-${i}" cx="${p[0]}" cy="${p[1]}" r="3.4" fill="var(--accent)" stroke="var(--surface)" stroke-width="1.4"/>`; });
+    // ganancia mensual: sólida hasta el mes real del snapshot, punteada en la proyección
+    const gPts = ganancia.map((v,i) => [padL + i*gw + gw/2, yGan(v)]);
+    const realPts = gPts.slice(0, cutoff+1), projPts = gPts.slice(cutoff);
+    const pathFrom = (arr) => arr.map((p,i) => (i===0?"M":"L") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    if (realPts.length) svgHtml += `<path d="${pathFrom(realPts)}" fill="none" stroke="var(--proj-cdp4)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    if (projPts.length > 1) svgHtml += `<path d="${pathFrom(projPts)}" fill="none" stroke="var(--proj-cdp4)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5 4" opacity="0.75"/>`;
+    gPts.forEach((p,i) => {
+      const isReal = i <= cutoff;
+      svgHtml += `<circle data-t="gan-${i}" cx="${p[0]}" cy="${p[1]}" r="3.4" fill="${isReal?"var(--proj-cdp4)":"var(--surface)"}" stroke="var(--proj-cdp4)" stroke-width="1.6"/>`;
+    });
 
     svg.innerHTML = svgHtml;
     svg.querySelectorAll("[data-t]").forEach(node => {
       node.addEventListener("mousemove", (e) => {
         const [kind,i] = node.getAttribute("data-t").split("-"); const idx = +i;
-        const html = `<b>${MONTH_LABELS[idx]}</b><br>Ingresos: ${fmtMoney(ing[idx])}<br>Egresos: ${fmtMoney(egr[idx])}<br>Flujo acum.: ${fmtMoney(flujoAcc[idx])}`;
+        const ganLabel = idx <= cutoff ? "Ganancia" : "Ganancia (proyectada)";
+        const html = `<b>${MONTH_LABELS[idx]}</b><br>Ingresos: ${fmtMoney(ing[idx])}<br>Egresos: ${fmtMoney(egr[idx])}<br>Flujo acum.: ${fmtMoney(flujoAcc[idx])}<br>${ganLabel}: ${fmtMoney(ganancia[idx])}`;
         showTip(e.clientX, e.clientY, html);
       });
       node.addEventListener("mouseleave", hideTip);
@@ -1173,6 +1284,39 @@
     wrap.appendChild(table);
   }
 
+  function renderVentas(ventas){
+    const wrap = $("ventasWrap"); wrap.innerHTML = "";
+    if (!ventas.facturas || !ventas.facturas.length){ wrap.appendChild(el("div",{class:"empty-note", text:"Sube el Excel de Ventas para ver esta sección."})); return; }
+    if (ventas.totalExcelNoCuadra && ventas.totalExcelNoCuadra !== ventas.totalFacturado){
+      wrap.appendChild(el("div", {class:"bar-label", style:"margin-bottom:10px; color:var(--warning);"}, [
+        el("span", {text:"El total que trae el Excel de Alex en esta hoja es " + fmtMoney(ventas.totalExcelNoCuadra) + ", pero no cuadra con la suma de las " + ventas.facturas.length + " facturas listadas (" + fmtMoney(ventas.totalFacturado) + "). Puede faltar una factura en la planilla — vale la pena confirmarlo con Alex. Este panel usa el total recalculado desde las facturas."})
+      ]));
+    }
+    if (ventas.porMes && ventas.porMes.length > 1){
+      const maxV = Math.max(...ventas.porMes.map(x=>x[1]));
+      const card = el("div", {class:"hh-card", style:"margin-bottom:16px;"}, [ el("h3",{text:"Facturación por mes"}) ]);
+      ventas.porMes.forEach(([mes,val]) => {
+        const item = el("div", {class:"hh-item"}, [
+          el("span", {class:"hh-name", text:mes}),
+          el("span", {class:"hh-track"}, [ el("span", {class:"hh-fill"}) ]),
+          el("span", {class:"hh-val", text:fmtMoney(val,{compact:true})})
+        ]);
+        item.querySelector(".hh-fill").style.width = (maxV ? val/maxV*100 : 0) + "%";
+        item.querySelector(".hh-fill").style.background = "var(--good)";
+        card.appendChild(item);
+      });
+      wrap.appendChild(card);
+    }
+    const table = el("div", {class:"table-wrap"});
+    let rows = "";
+    ventas.facturas.forEach(f => {
+      rows += `<tr><td>${f.fecha}</td><td>${f.factura}</td><td class="num">${fmtMoney(f.neto)}</td><td class="num">${fmtMoney(f.iva)}</td><td class="num">${fmtMoney(f.total)}</td></tr>`;
+    });
+    const totalRow = `<tr class="total-row"><td>Total</td><td></td><td class="num">${fmtMoney(ventas.totalNeto)}</td><td class="num">${fmtMoney(ventas.totalIva)}</td><td class="num">${fmtMoney(ventas.totalFacturado)}</td></tr>`;
+    table.innerHTML = `<table><thead><tr><th>Fecha</th><th>Factura</th><th>Neto</th><th>IVA</th><th>Total</th></tr></thead><tbody>${rows}${totalRow}</tbody></table>`;
+    wrap.appendChild(table);
+  }
+
   function hhBars(items, total, wrap){
     items.slice(0,7).forEach(([name,val]) => {
       const item = el("div", {class:"hh-item"}, [
@@ -1183,6 +1327,74 @@
       item.querySelector(".hh-fill").style.width = (total ? val/total*100 : 0) + "%";
       wrap.appendChild(item);
     });
+  }
+
+  // Horas hombre mes a mes, separadas por persona (a pedido de Alex — antes solo mostraba el
+  // total acumulado de la empresa). Barra apilada: el alto total sigue siendo el acumulado del
+  // mes, cada tramo de color es el aporte de una persona (mismo orden y colores en todas las cajas).
+  function renderHHMesPersonaCard(hh){
+    const meses = hh.porMesPersona, personas = hh.personasOrden;
+    const card = el("div", {class:"hh-card", style:"grid-column: span 2;"}, [ el("h3",{text:"Por mes, separado por persona"}) ]);
+    const legend = el("div", {class:"legend", style:"margin-bottom:10px;"});
+    personas.forEach((p,i) => {
+      const sp = document.createElement("span");
+      const sw = document.createElement("i"); sw.style.background = catColor(i);
+      sp.appendChild(sw); sp.appendChild(document.createTextNode(p));
+      legend.appendChild(sp);
+    });
+    card.appendChild(legend);
+    const W = 560, H = 190, padL = 34, padR = 10, padT = 14, padB = 26;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const totals = meses.map(m => personas.reduce((a,p)=>a+(m.horas[p]||0),0));
+    const maxTotal = Math.max(1, ...totals);
+    const n = meses.length, gw = plotW / n;
+    let svgHtml = "";
+    for (let g=0; g<=3; g++){ const y = padT + plotH*g/3; svgHtml += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`; }
+    meses.forEach((m,i) => {
+      const x0 = padL + i*gw, bw = gw*0.5, bx = x0 + (gw-bw)/2;
+      let yCursor = padT + plotH;
+      personas.forEach((p,pi) => {
+        const h = m.horas[p] || 0;
+        const barH = plotH * (h/maxTotal);
+        yCursor -= barH;
+        svgHtml += `<rect data-t="${i}-${pi}" x="${bx.toFixed(1)}" y="${yCursor.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(barH,0.5).toFixed(1)}" fill="${catColor(pi)}"/>`;
+      });
+      svgHtml += `<text x="${(x0+gw/2).toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="11" fill="var(--ink-faint)" font-family="IBM Plex Mono">${m.mes.split(" ")[0]}</text>`;
+      const topY = padT + plotH - plotH*(totals[i]/maxTotal) - 6;
+      svgHtml += `<text x="${(x0+gw/2).toFixed(1)}" y="${topY.toFixed(1)}" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)" font-family="IBM Plex Mono">${fmtNum(totals[i],0)}</text>`;
+    });
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", "100%"); svg.setAttribute("viewBox", "0 0 " + W + " " + H); svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    svg.innerHTML = svgHtml;
+    card.appendChild(svg);
+    svg.querySelectorAll("[data-t]").forEach(node => {
+      node.addEventListener("mousemove", (e) => {
+        const [i,pi] = node.getAttribute("data-t").split("-").map(Number);
+        const m = meses[i], p = personas[pi];
+        showTip(e.clientX, e.clientY, `<b>${m.mes}</b><br>${p}: ${fmtNum(m.horas[p]||0,1)} h`);
+      });
+      node.addEventListener("mouseleave", hideTip);
+    });
+    return card;
+  }
+  // Costo de HH por persona (Jun-Ago), en pesos y en UF — a pedido de Alex. Tarifa por rol,
+  // ver nota en ROLE_HOURLY_RATE_UF más arriba: el cruce persona→rol es una inferencia nuestra,
+  // no algo que Alex haya confirmado nombre por nombre.
+  function renderHHCostoPersonaCard(hh){
+    const card = el("div", {class:"hh-card", style:"grid-column: span 2;"}, [ el("h3",{text:"Costo de horas hombre por persona (Jun–Ago 2026)"}) ]);
+    const table = el("div", {class:"table-wrap"});
+    let rows = "";
+    hh.costoPersona.forEach(c => {
+      rows += `<tr><td>${c.persona}</td><td>${c.rol}</td><td class="num">${fmtNum(c.horasTotal,1)} h</td>` +
+        `<td class="num">${fmtNum(c.valorHoraUF,4)} UF</td><td class="num">${fmtMoney(c.valorHoraCLP)}</td>` +
+        `<td class="num">${fmtNum(c.costoUF,1)} UF</td><td class="num">${fmtMoney(c.costoCLP)}</td></tr>`;
+    });
+    table.innerHTML = `<table><thead><tr><th>Persona</th><th>Rol asignado</th><th>Horas</th><th>Valor hora (UF)</th><th>Valor hora ($)</th><th>Costo total (UF)</th><th>Costo total ($)</th></tr></thead><tbody>${rows}</tbody></table>`;
+    card.appendChild(table);
+    card.appendChild(el("div", {class:"bar-label", style:"margin-top:8px;"}, [ el("span", {text:
+      "Tarifa por rol tomada de la hoja \"Variables\" del Excel financiero de Alex (Costos Empresa M.O.). El cruce persona→rol (Gerencia→Grte. Operación, Ingeniería→Ing. Proyectista, Terreno→Técnico Eléctrico) es una inferencia a partir del área ya usada en este panel, no algo que Alex haya confirmado persona por persona — vale la pena que lo revise. UF de referencia: $" + VALOR_UF_REF.toLocaleString("es-CL") + " (" + VALOR_UF_REF_FECHA + ")."
+    }) ]));
+    return card;
   }
 
   function renderHH(hh){
@@ -1236,7 +1448,14 @@
     }
 
     if (hh.porPersona && hh.porPersona.length){ const maxPe = Math.max(...hh.porPersona.map(x=>x[1])); const c5 = el("div",{class:"hh-card"},[el("h3",{text:"Por persona"})]); hhBars(hh.porPersona, maxPe, c5); grid.appendChild(c5); }
-    if (hh.porMes && hh.porMes.length > 1){ const maxM = Math.max(...hh.porMes.map(x=>x[1])); const c6 = el("div",{class:"hh-card"},[el("h3",{text:"Por mes"})]); hhBars(hh.porMes, maxM, c6); grid.appendChild(c6); }
+    if (hh.porMesPersona && hh.porMesPersona.length > 1 && hh.personasOrden){
+      grid.appendChild(renderHHMesPersonaCard(hh));
+    } else if (hh.porMes && hh.porMes.length > 1){
+      const maxM = Math.max(...hh.porMes.map(x=>x[1])); const c6 = el("div",{class:"hh-card"},[el("h3",{text:"Por mes"})]); hhBars(hh.porMes, maxM, c6); grid.appendChild(c6);
+    }
+    if (hh.costoPersona && hh.costoPersona.length){
+      grid.appendChild(renderHHCostoPersonaCard(hh));
+    }
     if (hh.ejecucion && hh.ejecucion.length){
       const c6 = el("div", {class:"hh-card"}, [ el("h3",{text:"Ejecución HH vs. presupuesto"}) ]);
       hh.ejecucion.slice(0,7).forEach(p => {
