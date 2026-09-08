@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cockpit AGI Eléctrica</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;650&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <style>
   :root{
@@ -76,44 +75,6 @@
   }
   .snap-tab.active{background:var(--accent); border-color:var(--accent); color:var(--accent-ink);}
 
-  /* ---------- upload dock ---------- */
-  .dock{
-    margin-top:22px; border:1.5px dashed var(--line-strong); border-radius:var(--radius);
-    background:var(--surface); padding:22px; display:flex; align-items:center; gap:18px; flex-wrap:wrap;
-    transition:border-color .15s, background .15s;
-  }
-  .dock.dragover{border-color:var(--accent); background:var(--accent-soft);}
-  .dock-icon{width:38px; height:38px; flex:none; color:var(--accent);}
-  .dock-text{flex:1; min-width:220px;}
-  .dock-text b{font-size:14.5px;}
-  .dock-text p{margin:3px 0 0; font-size:12.8px; color:var(--ink-muted);}
-  .dock button{
-    font:600 13px "IBM Plex Sans",sans-serif; padding:9px 16px; border-radius:8px; border:1px solid var(--accent);
-    background:var(--accent); color:var(--accent-ink); cursor:pointer;
-  }
-  .dock button:hover{filter:brightness(1.06);}
-
-  .manifest{margin-top:12px; display:flex; flex-direction:column; gap:6px;}
-  .manifest-row{
-    display:flex; align-items:center; gap:10px; font-size:12.8px; background:var(--surface);
-    border:1px solid var(--line); border-radius:8px; padding:8px 12px;
-  }
-  .manifest-row .fname{font-family:"IBM Plex Mono",monospace; color:var(--ink); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .tag{font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; padding:3px 8px; border-radius:999px; font-weight:600;}
-  .tag.panel{background:var(--accent-soft); color:var(--accent);}
-  .tag.cxc{background:var(--good-soft); color:var(--good);}
-  .tag.hh{background:var(--warning-soft); color:var(--warning);}
-  .tag.unknown{background:var(--critical-soft); color:var(--critical);}
-  .manifest-row select{font:500 11.5px "IBM Plex Sans",sans-serif; border:1px solid var(--line-strong); border-radius:6px; background:var(--surface); color:var(--ink); padding:3px 6px;}
-  .manifest-row .rm{cursor:pointer; color:var(--ink-faint); font-size:15px; line-height:1; border:none; background:none; padding:2px 4px;}
-  .manifest-row .rm:hover{color:var(--critical);}
-
-  .demo-banner{
-    margin-top:16px; display:flex; align-items:center; gap:10px; font-size:13px;
-    background:var(--warning-soft); color:var(--warning); border:1px solid var(--warning); border-radius:8px; padding:10px 14px;
-  }
-  .demo-banner b{font-weight:650;}
-
   /* ---------- KPI row ---------- */
   .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin-top:26px;}
   .kpi{
@@ -176,6 +137,20 @@
   .hh-item .hh-track{height:8px; border-radius:4px; background:var(--surface-2); overflow:hidden;}
   .hh-item .hh-fill{height:100%; background:var(--proj-raices); border-radius:4px;}
   .hh-item .hh-val{font-family:"IBM Plex Mono",monospace; text-align:right; color:var(--ink);}
+  .hh-item-click{cursor:pointer; border-radius:6px; padding:3px 4px; margin:0 -4px 7px; transition:background .12s;}
+  .hh-item-click:hover{background:var(--surface-2);}
+  .hh-item-click.active{background:var(--accent-soft);}
+  .hh-item-click.active .hh-name{color:var(--accent);}
+  .cxc-filter-bar{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    font-size:12.5px; color:var(--ink-muted); background:var(--accent-soft); border:1px solid var(--accent);
+    border-radius:8px; padding:8px 12px; margin-bottom:10px;
+  }
+  .cxc-filter-clear{
+    font:600 12px "IBM Plex Sans",sans-serif; color:var(--accent); background:none; border:1px solid var(--accent);
+    border-radius:6px; padding:4px 10px; cursor:pointer;
+  }
+  .cxc-filter-clear:hover{background:var(--accent-soft);}
 
   .hh-toolbar{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;}
   .hh-filter-tab{border:1px solid var(--line-strong); border-radius:999px; background:var(--surface); padding:6px 14px; font-size:12.5px; color:var(--ink-muted); cursor:pointer; font-family:inherit;}
@@ -226,21 +201,6 @@
   </header>
 
   <main>
-    <div class="dock" id="dock">
-      <svg class="dock-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v12m0-12 4 4m-4-4-4 4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <div class="dock-text">
-        <b>Suelta aquí los Excel de este mes</b>
-        <p>Panel Financiero, Cuentas por Cobrar y Horas Hombre — los que tengas. Se detecta el tipo de cada archivo automáticamente. Todo se procesa en tu navegador: nada se sube ni se guarda en ningún servidor.</p>
-      </div>
-      <button id="pickBtn" type="button">Elegir archivos</button>
-      <input id="fileInput" class="visually-hidden" type="file" multiple accept=".xlsx,.xls,.csv">
-    </div>
-
-    <div class="manifest" id="manifest"></div>
-    <div class="demo-banner" id="demoBanner" hidden>
-      <span>⚠</span><span><b>Estás viendo datos de ejemplo.</b> Sube arriba los Excel reales de AGI SPA para reemplazarlos.</span>
-    </div>
-
     <section class="kpis" id="kpiRow"></section>
 
     <section class="panel">
@@ -276,7 +236,7 @@
     </section>
 
     <footer>
-      <span>Todo se procesa en tu navegador — nada sale de aquí.</span>
+      <span>Sitio estático, sin login ni servidor — Sebastián actualiza los datos cada mes.</span>
       <span id="lastUpdated"></span>
     </footer>
   </main>
@@ -423,6 +383,7 @@
     manifest: []           // {name, type, note}
   };
   const hhFilter = { area: null, persona: null }; // vista por proyecto: filtro activo en la sección Horas Hombre
+  const cxcFilter = { bucket: null }; // antigüedad de cartera: bucket activo en la sección Cuentas por Cobrar
 
   /* ================= classification ================= */
   function classifyWorkbook(wb){
@@ -935,12 +896,10 @@
   function activeSnap(){ return state.snapshots[state.activeSnapshot] || demoSnapshot(); }
 
   function render(){
-    renderManifest();
     renderTabs();
     const snap = activeSnap();
     const cxc = state.cxc || demoCxC();
     const hh = state.hh || demoHH();
-    $("demoBanner").hidden = state.snapshots.length > 0;
     renderKPIs(snap, cxc, hh);
     renderFlujo(snap);
     renderProyectosDonuts(snap);
@@ -949,8 +908,8 @@
     renderHH(hh);
     $("srcFlujo").textContent = "hoja: Resumen General — " + (snap.fileName || "");
     $("srcProyectos").textContent = "hojas: CC-* / IG-* — " + (snap.fileName || "");
-    $("srcCxc").textContent = cxc.isDemo ? "ejemplo" : (cxc.fileName || "AGI_Clientes");
-    $("srcHh").textContent = hh.isDemo ? "ejemplo" : (hh.fileName || "archivo cargado");
+    $("srcCxc").textContent = cxc.fileName || "AGI_Clientes";
+    $("srcHh").textContent = hh.fileName || "Control_HH_Proyectos";
     $("lastUpdated").textContent = "Vista: " + (snap.label || "") + " · " + new Date().toLocaleString("es-CL");
   }
 
@@ -962,29 +921,6 @@
       tab.addEventListener("click", () => { state.activeSnapshot = i; render(); });
       wrap.appendChild(tab);
     });
-  }
-
-  function renderManifest(){
-    const wrap = $("manifest"); wrap.innerHTML = "";
-    state.manifest.forEach((m,i) => {
-      const row = el("div", {class:"manifest-row"}, [
-        el("span", {class:"fname", text:m.name}),
-        el("span", {class:"tag " + m.type, text: m.type === "panel" ? "Panel Financiero" : m.type === "cxc" ? "Cuentas por Cobrar" : m.type === "hh" ? "Horas Hombre" : "Sin identificar"}),
-        el("button", {class:"rm", text:"✕", title:"Quitar"})
-      ]);
-      row.querySelector(".rm").addEventListener("click", () => removeManifest(i));
-      wrap.appendChild(row);
-    });
-  }
-
-  function removeManifest(i){
-    const m = state.manifest[i];
-    if (m.type === "panel") state.snapshots = state.snapshots.filter(s => s.fileName !== m.name);
-    if (m.type === "cxc") { state.cxc = null; }
-    if (m.type === "hh") { state.hh = null; hhFilter.area = null; hhFilter.persona = null; }
-    state.manifest.splice(i,1);
-    state.activeSnapshot = Math.max(0, state.snapshots.length - 1);
-    render();
   }
 
   function kpiCard(label, value, sub, pillText, pillClass){
@@ -1124,6 +1060,9 @@
     if (bucketLabel === "31-60 días") return "warning";
     return "critical"; // 61-90 y +90: mismo tono de riesgo alto, distinguibles por el monto y la etiqueta
   }
+  function clientBucket(c){
+    return (c.diasMora != null) ? agingBucket(c.diasMora) : "Sin fecha";
+  }
   function renderCxCAging(cxc){
     if (!cxc.hasAging) return null;
     const total = Object.values(cxc.buckets).reduce((a,b)=>a+b,0);
@@ -1133,7 +1072,8 @@
       const val = cxc.buckets[label] || 0;
       if (!val) return;
       const sev = label === "Sin fecha" ? null : agingSeverityClass(label);
-      const item = el("div", {class:"hh-item"}, [
+      const isActive = cxcFilter.bucket === label;
+      const item = el("div", {class:"hh-item hh-item-click" + (isActive ? " active" : ""), title:"Ver los clientes de este tramo"}, [
         el("span", {class:"hh-name", text:label, title:label}),
         el("span", {class:"hh-track"}, [ el("span", {class:"hh-fill"}) ]),
         el("span", {class:"hh-val", text:fmtMoney(val,{compact:true})})
@@ -1141,9 +1081,10 @@
       const fill = item.querySelector(".hh-fill");
       fill.style.width = (total ? val/total*100 : 0) + "%";
       if (sev) fill.style.background = "var(--" + sev + ")";
+      item.addEventListener("click", () => { cxcFilter.bucket = (cxcFilter.bucket === label ? null : label); render(); });
       card.appendChild(item);
     });
-    card.appendChild(el("div", {class:"bar-label", style:"margin-top:6px;"}, [ el("span",{text:"Clasificado por fecha del documento más antiguo de cada cliente. Sin fecha: bloques donde el archivo no trae columna de fecha detectable."}) ]));
+    card.appendChild(el("div", {class:"bar-label", style:"margin-top:6px;"}, [ el("span",{text:"Clasificado por fecha del documento más antiguo de cada cliente. Sin fecha: bloques donde el archivo no trae columna de fecha detectable. Haz clic en un tramo para ver sus clientes."}) ]));
     return card;
   }
   function renderCxC(cxc){
@@ -1151,15 +1092,31 @@
     if (!cxc.clients.length){ wrap.appendChild(el("div",{class:"empty-note", text:"Sube el Excel de Cuentas por Cobrar para ver esta sección."})); return; }
     const aging = renderCxCAging(cxc);
     if (aging) wrap.appendChild(aging);
+    const filterActive = cxc.hasAging && cxcFilter.bucket;
+    const visibleClients = filterActive ? cxc.clients.filter(c => clientBucket(c) === cxcFilter.bucket) : cxc.clients;
+    if (filterActive){
+      const subtotal = visibleClients.reduce((a,c)=>a+c.saldo,0);
+      const bar = el("div", {class:"cxc-filter-bar"}, [
+        el("span", {text:"Mostrando " + visibleClients.length + " cliente" + (visibleClients.length===1?"":"s") + " en \"" + cxcFilter.bucket + "\" · " + fmtMoney(subtotal)}),
+        el("button", {class:"cxc-filter-clear", type:"button", text:"Ver todos ✕"})
+      ]);
+      bar.querySelector(".cxc-filter-clear").addEventListener("click", () => { cxcFilter.bucket = null; render(); });
+      wrap.appendChild(bar);
+    }
     const table = el("div", {class:"table-wrap"});
     let rows = "";
-    cxc.clients.forEach(c => {
+    visibleClients.forEach(c => {
       const pctTotal = cxc.grandTotal ? c.saldo/cxc.grandTotal : 0;
       const mora = c.diasMora != null ? c.diasMora + " d" : "—";
       rows += `<tr><td>${c.name}</td><td class="num">${c.code||""}</td><td class="num">${fmtMoney(c.saldo)}</td><td class="num">${pct(pctTotal)}</td><td class="num">${mora}</td></tr>`;
     });
-    table.innerHTML = `<table><thead><tr><th>Cliente</th><th>Código</th><th>Saldo</th><th>% del total</th><th>Antigüedad</th></tr></thead><tbody>${rows}
-      <tr class="total-row"><td>Total</td><td></td><td class="num">${fmtMoney(cxc.grandTotal)}</td><td class="num">100%</td><td></td></tr></tbody></table>`;
+    if (!visibleClients.length){
+      rows = `<tr><td colspan="5" class="empty-note">No hay clientes en este tramo.</td></tr>`;
+    }
+    const totalRow = filterActive
+      ? ""
+      : `<tr class="total-row"><td>Total</td><td></td><td class="num">${fmtMoney(cxc.grandTotal)}</td><td class="num">100%</td><td></td></tr>`;
+    table.innerHTML = `<table><thead><tr><th>Cliente</th><th>Código</th><th>Saldo</th><th>% del total</th><th>Antigüedad</th></tr></thead><tbody>${rows}${totalRow}</tbody></table>`;
     wrap.appendChild(table);
   }
 
@@ -1241,58 +1198,6 @@
       grid.appendChild(c6);
     }
   }
-
-  /* ================= file intake ================= */
-  function handleFiles(fileList){
-    Array.from(fileList).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try{
-          const wb = XLSX.read(new Uint8Array(e.target.result), {type:"array"});
-          const type = classifyWorkbook(wb);
-          state.manifest.push({name:file.name, type});
-          if (type === "panel"){
-            const snap = parsePanelWorkbook(wb, file.name);
-            state.snapshots = state.snapshots.filter(s => s.fileName !== file.name);
-            state.snapshots.push(snap);
-            state.snapshots.sort((a,b)=> a.label.localeCompare(b.label,"es"));
-            state.activeSnapshot = state.snapshots.length - 1;
-            render();
-          } else if (type === "cxc"){
-            const cxc = parseCxC(wb);
-            cxc.fileName = file.name;
-            state.cxc = cxc;
-            render();
-          } else if (type === "hh"){
-            const parsed = parseHH(wb);
-            if (parsed){
-              parsed.fileName = file.name;
-              state.hh = parsed;
-              hhFilter.area = null; hhFilter.persona = null; // nuevo archivo: limpiar el filtro de la vista por proyecto
-              render();
-            } else {
-              state.manifest[state.manifest.length-1].type = "unknown";
-              render();
-            }
-          } else {
-            render();
-          }
-        } catch(err){
-          state.manifest.push({name:file.name + " (error)", type:"unknown"});
-          console.error("Error leyendo " + file.name, err);
-          render();
-        }
-      };
-      reader.readAsArrayBuffer(file);
-    });
-  }
-
-  const dock = $("dock");
-  $("pickBtn").addEventListener("click", () => $("fileInput").click());
-  $("fileInput").addEventListener("change", (e) => handleFiles(e.target.files));
-  ["dragenter","dragover"].forEach(ev => dock.addEventListener(ev, (e) => { e.preventDefault(); dock.classList.add("dragover"); }));
-  ["dragleave","drop"].forEach(ev => dock.addEventListener(ev, (e) => { e.preventDefault(); dock.classList.remove("dragover"); }));
-  dock.addEventListener("drop", (e) => handleFiles(e.dataTransfer.files));
 
   render();
 })();
