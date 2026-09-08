@@ -376,8 +376,8 @@
 
   /* ================= state ================= */
   const state = {
-    snapshots: [],        // parsed "Panel Financiero" workbooks, one per month file
-    activeSnapshot: null, // index
+    snapshots: [demoSnapshotJun(), demoSnapshotJul(), demoSnapshot()], // uno por archivo "Panel financiero Total" mensual (Junio, Julio, Agosto 2026)
+    activeSnapshot: 2, // Agosto 2026 (mes más reciente) por defecto
     cxc: null, cxcIsDemo: true,
     hh: null, hhIsDemo: true,
     manifest: []           // {name, type, note}
@@ -796,6 +796,54 @@
     return parseHHRegistro(wb) || parseHHFlat(wb);
   }
 
+  /* ================= snapshots mensuales (datos reales, hoja "Resumen General" de cada archivo) ================= */
+  // Junio y Julio: solo se pudo extraer el resumen de ingresos/egresos y el cuadro "RESULTADO NETO
+  // PROYECTADO OBRAS" (presupuesto/proyección/utilidad por proyecto) de esos archivos — las hojas de
+  // detalle CC-*/IG-* (gasto ejecutado Of. Central y desglose por partida) no fueron accesibles para
+  // esos dos meses, por eso esos campos se omiten (la vista los oculta automáticamente, sin inventar datos).
+  function demoSnapshotJun(){
+    const ing = [1370418,0,0,8379160,15466532,5036623,18013232,24094995,155056148,10967627,104664239,8809753];
+    const egr = [5708377,5708377,6144660,9615761,9615761,10972316,11351515,50494670,94292537,20729563,89158380,20729563];
+    let acc = 0; const flujo = ing.map((v,i)=>v-egr[i]);
+    const flujoAcc = flujo.map(v => acc += v);
+    return {
+      fileName: "2026-jun Panel financiero Total rev AB.xlsx", label: "Junio 2026",
+      resumen: {
+        totalIngresos:{label:"TOTAL INGRESOS", values:ing, total:ing.reduce((a,b)=>a+b,0)},
+        totalEgresos:{label:"TOTAL EGRESOS", values:egr, total:egr.reduce((a,b)=>a+b,0)},
+        flujoCaja:{label:"FLUJO DE CAJA", values:flujo, total:flujo.reduce((a,b)=>a+b,0)},
+        flujoAcumulado:{label:"FLUJO DE CAJA ACUMULADO", values:flujoAcc, total:flujoAcc[11]}
+      },
+      proyectos: [
+        {name:"Raíces de Peñablanca", presupuesto:1008656185, proyeccion:1008299411, resultado:356774, utilidad:356774},
+        {name:"Condell", presupuesto:301146274, proyeccion:268825587, resultado:32320687, utilidad:32320687},
+        {name:"Terraza Santa María", presupuesto:58991688, proyeccion:51681164, resultado:7310523, utilidad:7310523},
+        {name:"Cumbres del Pinar 4", presupuesto:155749454, proyeccion:121728795, resultado:34020659, utilidad:34020659}
+      ]
+    };
+  }
+  function demoSnapshotJul(){
+    const ing = [1372793,0,0,8393683,15493338,5045353,18044452,24136757,155324892,10986636,104845644,8825022];
+    const egr = [5718271,5718271,6155310,9632427,9632427,10991333,11371190,50582188,94455965,20765491,89312909,20765491];
+    let acc = 0; const flujo = ing.map((v,i)=>v-egr[i]);
+    const flujoAcc = flujo.map(v => acc += v);
+    return {
+      fileName: "2026-jul Panel financiero Total rev AB.xlsx", label: "Julio 2026",
+      resumen: {
+        totalIngresos:{label:"TOTAL INGRESOS", values:ing, total:ing.reduce((a,b)=>a+b,0)},
+        totalEgresos:{label:"TOTAL EGRESOS", values:egr, total:egr.reduce((a,b)=>a+b,0)},
+        flujoCaja:{label:"FLUJO DE CAJA", values:flujo, total:flujo.reduce((a,b)=>a+b,0)},
+        flujoAcumulado:{label:"FLUJO DE CAJA ACUMULADO", values:flujoAcc, total:flujoAcc[11]}
+      },
+      proyectos: [
+        {name:"Raíces de Peñablanca", presupuesto:1008656185, proyeccion:1007806546, resultado:849639, utilidad:849639},
+        {name:"Condell", presupuesto:301146274, proyeccion:268825587, resultado:32320687, utilidad:32320687},
+        {name:"Terraza Santa María", presupuesto:58991688, proyeccion:51681164, resultado:7310523, utilidad:7310523},
+        {name:"Cumbres del Pinar 4", presupuesto:155749454, proyeccion:121728795, resultado:34020659, utilidad:34020659}
+      ]
+    };
+  }
+
   /* ================= demo data (clearly marked) ================= */
   function demoSnapshot(){
     const months = MONTH_LABELS;
@@ -804,7 +852,7 @@
     let acc = 0; const flujo = ing.map((v,i)=>v-egr[i]);
     const flujoAcc = flujo.map(v => acc += v);
     return {
-      fileName: "ejemplo.xlsx", label: "Ejemplo — Agosto 2026", isDemo:true,
+      fileName: "2026-ago Panel financiero Total rev AB.xlsx", label: "Agosto 2026",
       resumen: {
         totalIngresos:{label:"TOTAL INGRESOS", values:ing, total:ing.reduce((a,b)=>a+b,0)},
         totalEgresos:{label:"TOTAL EGRESOS", values:egr, total:egr.reduce((a,b)=>a+b,0)},
@@ -940,10 +988,15 @@
     row.appendChild(kpiCard("Ingresos (año a la fecha)", fmtMoney(ing,{compact:true}), "según Resumen General, en pesos"));
     row.appendChild(kpiCard("Egresos (año a la fecha)", fmtMoney(egr,{compact:true}), "según Resumen General, en pesos"));
     row.appendChild(kpiCard("Flujo neto", fmtMoney(flujo,{compact:true}), flujo>=0?"superávit acumulado":"déficit acumulado", flujo>=0?"Bien":"Alerta", flujo>=0?"good":"critical"));
-    const totalPresup = snap.proyectos.reduce((a,p)=>a+(p.presupuesto||0),0);
-    const totalGasto = snap.proyectos.reduce((a,p)=>a+(p.gastoIG||0),0);
-    const ratio = totalPresup ? totalGasto/totalPresup : 0;
-    row.appendChild(kpiCard("Ejecución presupuestaria", pct(ratio), fmtMoney(totalGasto,{compact:true})+" de "+fmtMoney(totalPresup,{compact:true}), ratio>1?"Sobre":ratio>0.85?"Ajustado":"OK", ratio>1?"critical":ratio>0.85?"warning":"good"));
+    const hasGastoData = snap.proyectos.some(p => p.gastoIG != null);
+    if (hasGastoData){
+      const totalPresup = snap.proyectos.reduce((a,p)=>a+(p.presupuesto||0),0);
+      const totalGasto = snap.proyectos.reduce((a,p)=>a+(p.gastoIG||0),0);
+      const ratio = totalPresup ? totalGasto/totalPresup : 0;
+      row.appendChild(kpiCard("Ejecución presupuestaria", pct(ratio), fmtMoney(totalGasto,{compact:true})+" de "+fmtMoney(totalPresup,{compact:true}), ratio>1?"Sobre":ratio>0.85?"Ajustado":"OK", ratio>1?"critical":ratio>0.85?"warning":"good"));
+    } else {
+      row.appendChild(kpiCard("Ejecución presupuestaria", "—", "gasto Of. Central no disponible para este mes"));
+    }
     row.appendChild(kpiCard("Cuentas por cobrar", fmtMoney(cxc.grandTotal,{compact:true}), cxc.clients.length + " clientes con saldo"));
     row.appendChild(kpiCard("Horas hombre" + (hh.periodo ? " · " + hh.periodo : ""), fmtNum(hh.total,1) + " h", hh.porProyecto.length + " proyectos con registro"));
   }
