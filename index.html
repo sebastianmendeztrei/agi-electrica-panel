@@ -1397,6 +1397,37 @@
     return card;
   }
 
+  // Cruce persona × proyecto: cuántas horas dedicó cada persona a cada proyecto, en una sola tabla
+  // (antes solo se podía ver clickeando área → persona en las donas de arriba, una por una).
+  function renderHHMatrizCard(hh){
+    const rows = hh.rows;
+    const personas = hh.personasOrden && hh.personasOrden.length ? hh.personasOrden : Array.from(new Set(rows.map(r=>r.persona))).sort((a,b)=>a.localeCompare(b,"es"));
+    const proyectoTotales = {};
+    rows.forEach(r => { proyectoTotales[r.proyecto] = (proyectoTotales[r.proyecto]||0) + r.horas; });
+    const proyectos = Object.keys(proyectoTotales).sort((a,b)=>proyectoTotales[b]-proyectoTotales[a]);
+    const cell = {};
+    rows.forEach(r => { const k = r.proyecto+"|"+r.persona; cell[k] = (cell[k]||0) + r.horas; });
+    const card = el("div", {class:"hh-card", style:"grid-column: span 2;"}, [ el("h3",{text:"Cruce: horas por persona y proyecto" + (hh.periodo ? " (" + hh.periodo + ")" : "")}) ]);
+    const table = el("div", {class:"table-wrap"});
+    const head = "<tr><th>Proyecto</th>" + personas.map(p=>`<th class="num">${p}</th>`).join("") + `<th class="num">Total</th></tr>`;
+    const personaTotales = {}; personas.forEach(p=>personaTotales[p]=0);
+    let bodyHtml = "";
+    proyectos.forEach(proy => {
+      let rowTotal = 0;
+      const cells = personas.map(p => {
+        const v = cell[proy+"|"+p] || 0;
+        rowTotal += v; personaTotales[p] += v;
+        return `<td class="num">${v ? fmtNum(v,1) : "—"}</td>`;
+      }).join("");
+      bodyHtml += `<tr><td>${proy}</td>${cells}<td class="num">${fmtNum(rowTotal,1)}</td></tr>`;
+    });
+    const grandTotal = personas.reduce((a,p)=>a+personaTotales[p],0);
+    const totalRow = `<tr class="total-row"><td>Total</td>${personas.map(p=>`<td class="num">${fmtNum(personaTotales[p],1)}</td>`).join("")}<td class="num">${fmtNum(grandTotal,1)}</td></tr>`;
+    table.innerHTML = `<table><thead>${head}</thead><tbody>${bodyHtml}${totalRow}</tbody></table>`;
+    card.appendChild(table);
+    return card;
+  }
+
   function renderHH(hh){
     const areaTabs = $("hhAreaTabs"), chips = $("hhPersonaChips"), stat = $("hhContextStat"), donutRow = $("hhDonutRow"), grid = $("hhGrid");
     areaTabs.innerHTML = ""; chips.innerHTML = ""; stat.textContent = ""; donutRow.innerHTML = ""; grid.innerHTML = "";
@@ -1447,6 +1478,7 @@
       if (hh.porArea.length){ const c3 = el("div",{class:"donut-card"},[el("h3",{text:"Por área"})]); c3.appendChild(donutChart(hh.porArea)); donutRow.appendChild(c3); }
     }
 
+    if (hasRows){ grid.appendChild(renderHHMatrizCard(hh)); }
     if (hh.porPersona && hh.porPersona.length){ const maxPe = Math.max(...hh.porPersona.map(x=>x[1])); const c5 = el("div",{class:"hh-card"},[el("h3",{text:"Por persona"})]); hhBars(hh.porPersona, maxPe, c5); grid.appendChild(c5); }
     if (hh.porMesPersona && hh.porMesPersona.length > 1 && hh.personasOrden){
       grid.appendChild(renderHHMesPersonaCard(hh));
