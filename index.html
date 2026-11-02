@@ -116,6 +116,24 @@
   .pill.warning{background:var(--warning-soft); color:var(--warning);}
   .pill.critical{background:var(--critical-soft); color:var(--critical);}
 
+  /* ---------- nav cards (ir a sección) ---------- */
+  .nav-cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; margin-top:16px; scroll-margin-top:16px;}
+  .nav-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:12px 14px;
+    box-shadow:var(--shadow); display:flex; flex-direction:column; gap:4px; cursor:pointer; text-align:left;
+    color:inherit; font-family:inherit; transition:border-color .15s, box-shadow .15s, transform .08s;
+    position:relative;
+  }
+  .nav-card:hover{border-color:var(--accent); box-shadow:var(--glow-strong);}
+  .nav-card:active{transform:translateY(1px);}
+  .nav-card.active{border-color:var(--accent); box-shadow:var(--glow-strong);}
+  .nav-card .nc-top{display:flex; align-items:center; gap:8px;}
+  .nav-card .nc-icon{display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:6px; background:var(--surface-2); color:var(--accent); font-size:13px;}
+  .nav-card .nc-label{font-size:11.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-muted); font-weight:600;}
+  .nav-card .nc-value{font-family:"IBM Plex Mono",monospace; font-size:16px; font-weight:600; color:var(--ink); letter-spacing:-.01em;}
+  .nav-card .nc-sub{font-size:11.5px; color:var(--ink-faint);}
+  section.panel{scroll-margin-top:12px;}
+
   /* ---------- panels ---------- */
   .panel{margin-top:34px;}
   .panel-head{display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:14px; flex-wrap:wrap;}
@@ -236,7 +254,9 @@
   <main>
     <section class="kpis" id="kpiRow"></section>
 
-    <section class="panel">
+    <nav class="nav-cards" id="navCards" aria-label="Ir a sección"></nav>
+
+    <section class="panel" id="secFlujo">
       <div class="panel-head"><h2>Flujo de caja mensual</h2><span class="src" id="srcFlujo"></span></div>
       <div class="chart-card">
         <div class="legend">
@@ -249,24 +269,24 @@
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="secProyectos">
       <div class="panel-head"><h2>Control de costos por proyecto</h2><span class="src" id="srcProyectos"></span></div>
       <div class="donut-row" id="proyectosDonutRow"></div>
       <div class="proyectos-grid" id="proyectosGrid"></div>
       <div class="bar-label" id="proyectosNote" style="margin-top:12px;">Presupuesto y "Ejecutado" (gasto real de Of. Central) son cifras reales. "Proyección (modelo de Alex)" y "Costo proyectado a cierre" son la estimación de cómo debería terminar cada proyecto según el modelo de Alex, no un resultado ya cerrado.</div>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="secCxc">
       <div class="panel-head"><h2>Cuentas por cobrar</h2><span class="src" id="srcCxc"></span></div>
       <div id="cxcWrap"></div>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="secVentas">
       <div class="panel-head"><h2>Ventas facturadas</h2><span class="src" id="srcVentas"></span></div>
       <div id="ventasWrap"></div>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="secHh">
       <div class="panel-head"><h2>Horas hombre</h2><span class="src" id="srcHh"></span></div>
       <div class="hh-toolbar" id="hhAreaTabs"></div>
       <div class="hh-filter-sub" id="hhPersonaChips"></div>
@@ -1189,6 +1209,7 @@
     const ventas = state.ventas || demoVentas();
     const hh = state.hh || demoHH();
     renderKPIs(snap, cxc, hh);
+    renderNavCards(snap, cxc, ventas, hh);
     renderFlujo(snap);
     renderProyectosDonuts(snap);
     renderProyectos(snap);
@@ -1211,6 +1232,64 @@
       tab.addEventListener("click", () => { state.activeSnapshot = i; render(); });
       wrap.appendChild(tab);
     });
+  }
+
+  // Tarjetas selectoras — una por sección del panel. Click = scroll suave al bloque; se marcan como
+  // "active" según cuál sección está más centrada en el viewport (IntersectionObserver). Se arman
+  // cada vez que render() corre, para que los subtítulos reflejen el snapshot activo.
+  const NAV_ITEMS = [
+    { id:"secFlujo",     target:"#secFlujo",     icon:"📊", label:"Flujo de caja" },
+    { id:"secProyectos", target:"#secProyectos", icon:"🏗️", label:"Control de costos" },
+    { id:"secCxc",       target:"#secCxc",       icon:"💰", label:"Cuentas por cobrar" },
+    { id:"secVentas",    target:"#secVentas",    icon:"🧾", label:"Ventas facturadas" },
+    { id:"secHh",        target:"#secHh",        icon:"⏱️", label:"Horas hombre" }
+  ];
+  let navObserver = null;
+  function renderNavCards(snap, cxc, ventas, hh){
+    const wrap = $("navCards"); if (!wrap) return;
+    wrap.innerHTML = "";
+    const flujo = snap.resumen && snap.resumen.flujoAcumulado ? snap.resumen.flujoAcumulado.values : null;
+    const idxMes = snapMonthIndex(snap);
+    const flujoHoy = flujo ? flujo[Math.min(idxMes, 11)] : null;
+    const totPresup = snap.proyectos ? snap.proyectos.reduce((a,p)=>a+(p.presupuesto||0),0) : 0;
+    const totFact = ventas && ventas.totalFacturado ? ventas.totalFacturado : 0;
+    const metas = {
+      secFlujo:     { value: flujoHoy != null ? fmtMoney(flujoHoy,{compact:true}) : "—",             sub: flujoHoy != null ? "Flujo acumulado al mes" : "sin dato" },
+      secProyectos: { value: snap.proyectos ? snap.proyectos.length + " obras" : "—",                 sub: totPresup ? "Presupuesto " + fmtMoney(totPresup,{compact:true}) : "sin dato" },
+      secCxc:       { value: cxc && cxc.grandTotal != null ? fmtMoney(cxc.grandTotal,{compact:true}) : "—", sub: cxc && cxc.clients ? cxc.clients.length + " clientes" : "sin dato" },
+      secVentas:    { value: totFact ? fmtMoney(totFact,{compact:true}) : "—",                        sub: ventas && ventas.facturas ? ventas.facturas.length + " facturas" : "sin dato" },
+      secHh:        { value: hh && hh.total != null ? fmtNum(hh.total,1) + " h" : "—",                sub: hh && hh.periodo ? hh.periodo : (hh && hh.porProyecto ? hh.porProyecto.length + " proyectos" : "sin dato") }
+    };
+    NAV_ITEMS.forEach(it => {
+      const m = metas[it.id] || {value:"—", sub:""};
+      const card = el("button", {class:"nav-card", type:"button", "data-target":it.target, "aria-label":"Ir a " + it.label}, [
+        el("div", {class:"nc-top"}, [
+          el("span", {class:"nc-icon", text: it.icon}),
+          el("span", {class:"nc-label", text: it.label})
+        ]),
+        el("div", {class:"nc-value", text: m.value}),
+        m.sub ? el("div", {class:"nc-sub", text: m.sub}) : null
+      ]);
+      card.addEventListener("click", () => {
+        const node = document.querySelector(it.target);
+        if (node) node.scrollIntoView({ behavior:"smooth", block:"start" });
+      });
+      wrap.appendChild(card);
+    });
+    // Marca activa la tarjeta de la sección más visible en el viewport.
+    if (navObserver) navObserver.disconnect();
+    const cards = Array.from(wrap.querySelectorAll(".nav-card"));
+    const byTarget = Object.fromEntries(cards.map(c => [c.dataset.target, c]));
+    navObserver = new IntersectionObserver((entries) => {
+      // Toma el entry más cercano al top con la mayor fracción visible.
+      const best = entries
+        .filter(e => e.isIntersecting)
+        .sort((a,b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!best) return;
+      cards.forEach(c => c.classList.remove("active"));
+      const c = byTarget["#" + best.target.id]; if (c) c.classList.add("active");
+    }, { rootMargin: "-40% 0px -50% 0px", threshold: [0, 0.2, 0.5, 0.8, 1] });
+    NAV_ITEMS.forEach(it => { const n = document.querySelector(it.target); if (n) navObserver.observe(n); });
   }
 
   function kpiCard(label, value, sub, pillText, pillClass){
@@ -1451,7 +1530,7 @@
     if (!ventas.facturas || !ventas.facturas.length){ wrap.appendChild(el("div",{class:"empty-note", text:"Sube el Excel de Ventas para ver esta sección."})); return; }
     if (ventas.totalExcelNoCuadra && ventas.totalExcelNoCuadra !== ventas.totalFacturado){
       wrap.appendChild(el("div", {class:"bar-label", style:"margin-bottom:10px; color:var(--warning);"}, [
-        el("span", {text:"El total que trae el Excel de Alex en esta hoja es " + fmtMoney(ventas.totalExcelNoCuadra) + ", pero no cuadra con la suma de las " + ventas.facturas.length + " facturas listadas (" + fmtMoney(ventas.totalFacturado) + "). Puede faltar una factura en la planilla — vale la pena confirmarlo con Alex. Este panel usa el total recalculado desde las facturas."})
+        el("span", {text:"El total que trae el Excel en esta hoja es " + fmtMoney(ventas.totalExcelNoCuadra) + ", pero no cuadra con la suma de las " + ventas.facturas.length + " facturas listadas (" + fmtMoney(ventas.totalFacturado) + "). Este panel usa el total recalculado desde las facturas."})
       ]));
     }
     if (ventas.porMes && ventas.porMes.length > 1){
@@ -1554,7 +1633,7 @@
     table.innerHTML = `<table><thead><tr><th>Persona</th><th>Rol asignado</th><th>Horas</th><th>Valor hora (UF)</th><th>Valor hora ($)</th><th>Costo total (UF)</th><th>Costo total ($)</th></tr></thead><tbody>${rows}</tbody></table>`;
     card.appendChild(table);
     card.appendChild(el("div", {class:"bar-label", style:"margin-top:8px;"}, [ el("span", {text:
-      "Tarifa por rol tomada de la hoja \"Variables\" del Excel financiero de Alex (Costos Empresa M.O.). El cruce persona→rol (Gerencia→Grte. Operación, Ingeniería→Ing. Proyectista, Terreno→Técnico Eléctrico) es una inferencia a partir del área ya usada en este panel, no algo que Alex haya confirmado persona por persona — vale la pena que lo revise. UF de referencia: $" + VALOR_UF_REF.toLocaleString("es-CL") + " (" + VALOR_UF_REF_FECHA + ")."
+      "Tarifa por rol tomada de la hoja \"Variables\" del Excel financiero (Costos Empresa M.O.). El cruce persona→rol (Gerencia→Grte. Operación, Ingeniería→Ing. Proyectista, Terreno→Técnico Eléctrico) es una inferencia a partir del área ya usada en este panel, no un cruce confirmado persona por persona. UF de referencia: $" + VALOR_UF_REF.toLocaleString("es-CL") + " (" + VALOR_UF_REF_FECHA + ")."
     }) ]));
     return card;
   }
