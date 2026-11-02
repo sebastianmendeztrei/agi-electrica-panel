@@ -416,8 +416,8 @@
 
   /* ================= state ================= */
   const state = {
-    snapshots: [demoSnapshotJun(), demoSnapshotJul(), demoSnapshot(), demoSnapshotSep()], // uno por archivo "Panel financiero Total" mensual (Junio a Septiembre 2026)
-    activeSnapshot: 3, // Septiembre 2026 (mes más reciente) por defecto
+    snapshots: [demoSnapshotJun(), demoSnapshotJul(), demoSnapshot(), demoSnapshotSep(), demoSnapshotOct()], // uno por archivo "Panel financiero Total" mensual (Junio a Octubre 2026)
+    activeSnapshot: 4, // Octubre 2026 (mes más reciente) por defecto
     cxc: null, cxcIsDemo: true,
     ventas: null, ventasIsDemo: true,
     hh: null, hhIsDemo: true,
@@ -650,7 +650,7 @@
   // de Alex (Table.AddColumn "Personalizado" en la consulta Registro_HH); un nombre nuevo que
   // no esté aquí cae en "Sin área" en vez de romper el parseo.
   const PERSON_AREA = {
-    "martin rodrigues":"Terreno", "gonzalo armijo":"Terreno",
+    "martin rodrigues":"Terreno", "gonzalo armijo":"Terreno", "marcelo armijo":"Terreno",
     "daniel mesa":"Ingenieria", "alex balboa":"Gerencia"
   };
   // Tarifa de costo por hora, hoja "Variables" del Excel financiero AGI ("Costos Empresa M.O."),
@@ -986,6 +986,58 @@
       ]
     };
   }
+  // Octubre 2026: "2026-Octubre Panel financiero Total rev AB.xlsx", flujo cerrado (hoja "Flujo",
+  // igual que septiembre, trae el saldo inicial 2025 de $110M; el acumulado de abajo es tal cual
+  // la fila "FLUJO DE CAJA ACUMULADO" del Excel). Interclínica Viña del Mar YA aparece como
+  // proyecto propio: la hoja CC-CLI tiene presupuesto/proyección/resultado reales (antes era copia
+  // de TSM), y en HH ya concentra 501,5 h del mes (ver `demoHH`). Las hojas IG-* vinieron casi
+  // vacías este mes (sólo registros parciales de octubre) — por eso no se publica `gastoIG`: la
+  // tarjeta de "Ejecución presupuestaria" aparece como "—" hasta que Oficina Central cargue el
+  // detalle contable. UF al 30-10-2026: 41.242,32 (hoja Variables; INICIO sigue mostrando la
+  // etiqueta vieja "31-08-2026", pendiente de corregir con Alex).
+  function demoSnapshotOct(){
+    const ing = [1379932,0,0,8437333,8564830,2069899,7881545,6218729,1059276,27094578,68565539,131091736];
+    const egr = [5371150,5371150,5810462,9103263,9103263,11385993,9996617,10109408,15826914,28047559,24404619,164404619];
+    const flujo = ing.map((v,i)=>v-egr[i]);
+    const flujoAcc = [106008782,100637632,94827170,94161241,93622808,84306714,82191642,78300963,63533325,62580345,106741265,73428382];
+    return {
+      fileName: "2026-Octubre Panel financiero Total rev AB.xlsx", label: "Octubre 2026", sheetFlujo: "Flujo",
+      resumen: {
+        totalIngresos:{label:"TOTAL INGRESOS", values:ing, total:ing.reduce((a,b)=>a+b,0)},
+        totalEgresos:{label:"TOTAL EGRESOS", values:egr, total:egr.reduce((a,b)=>a+b,0)},
+        flujoCaja:{label:"FLUJO DE CAJA", values:flujo, total:flujo.reduce((a,b)=>a+b,0)},
+        flujoAcumulado:{label:"FLUJO DE CAJA ACUMULADO", values:flujoAcc, total:flujoAcc[11]}
+      },
+      proyectos: [
+        {name:"Raíces de Peñablanca", presupuesto:1008656185, proyeccion:783055640, resultado:1007294961,
+          partidas:[
+            {label:"Costo directo", presupuesto:972849865, proyeccion:754410584, resultado:972609462},
+            {label:"Gastos generales", presupuesto:35806320, proyeccion:28645056, resultado:34685499}
+          ]},
+        {name:"Condell", presupuesto:303591500, proyeccion:264390128, resultado:13516330,
+          partidas:[
+            {label:"Costo directo", presupuesto:287279744, proyeccion:249019650, resultado:12575052},
+            {label:"Gastos generales", presupuesto:16311755, proyeccion:15370478, resultado:941277}
+          ]},
+        {name:"Terraza Santa María", presupuesto:126705082, proyeccion:110028748, resultado:16676333,
+          partidas:[
+            {label:"Obra Gruesa · Costo directo", presupuesto:49535668, proyeccion:48352701, resultado:1182967},
+            {label:"Obra Gruesa · Gastos generales", presupuesto:8871200, proyeccion:9400000, resultado:-528800},
+            {label:"Terminaciones · Costo directo", presupuesto:68298214, proyeccion:52276047, resultado:16022167}
+          ]},
+        {name:"Cumbres del Pinar 4", presupuesto:155749454, proyeccion:110981187, resultado:44768266,
+          partidas:[
+            {label:"Costo directo", presupuesto:131250835, proyeccion:87907192, resultado:43343643},
+            {label:"Gastos generales", presupuesto:24498619, proyeccion:23073995, resultado:1424623}
+          ]},
+        {name:"Interclínica Viña del Mar", presupuesto:87999003, proyeccion:55895045, resultado:32104958,
+          partidas:[
+            {label:"Obra Gruesa · Costo directo", presupuesto:75516232, proyeccion:48663225, resultado:26853007},
+            {label:"Obra Gruesa · Gastos generales", presupuesto:12483771, proyeccion:7231820, resultado:5251951}
+          ]}
+      ]
+    };
+  }
   function demoCxC(){
     // Fuente: "Clientes y Ventas Total 2026.xlsx" (hoja Clientes, export Softland, corte 07-09-2026),
     // enviado por Alex el 08-09-2026. Reemplaza el corte anterior (que no traía a VCB Constructora).
@@ -1032,55 +1084,62 @@
     return { facturas, totalNeto, totalIva, totalFacturado, porMes: Object.entries(porMes), isDemo:true, fileName:"Clientes y Ventas Total 2026.xlsx", totalExcelNoCuadra: 46874498 };
   }
   function demoHH(){
-    // Septiembre 2026: horas reales por persona y proyecto, hoja "Registro" de
-    // "Control_HH_Proyectos.Rev2.xlsx" (SharePoint, versión del 02-10-2026), filtrada a fechas de
-    // septiembre. Cuadra exacto con el PDF "Reporte_HH_Empresa - Septiembre 2026" que llegó junto con
-    // el panel financiero (Alex 177,5 · Daniel 142 · Martín 209,5 · Gonzalo 209,5 = 738,5 h).
-    // Tipo de cliente según la hoja "Proyectos" del mismo Excel (TREI → interno, Área Interna →
-    // Oficina Central, resto → externo), igual que el parser y que el PDF de Alex.
+    // Octubre 2026: horas reales por persona y proyecto, hoja "Registro" de
+    // "Control_HH_Proyectos.Rev3.xlsx" (versión que llegó en el correo de Alex con el reporte
+    // financiero de octubre, 02-11-2026). Cuadra exacto con el PDF "Reporte_HH_Empresa_Octubre_2026"
+    // (Alex 178 · Daniel 86 · Martín 182 · Gonzalo 182 · Marcelo 122,5 = 750,5 h). Marcelo Armijo
+    // entra como persona nueva en Terreno este mes y la obra Interclínica Viña del Mar concentra
+    // 501,5 h (66,8 % del total). Tipo de cliente según la hoja "Proyectos" del mismo Excel (TREI →
+    // interno, Área Interna → Oficina Central, resto → externo), igual que el parser y que el PDF
+    // de Alex: Cliente Externo 567 h (75,5 %) · Oficina Central 92 h (12,3 %) · Cliente Interno
+    // 91,5 h (12,2 %).
     const CAT_BY_PROYECTO = {
       "Terraza Santa Maria":"Cliente_Interno", "Casas del Pinar 4":"Cliente_Interno", "Condell":"Cliente_Interno",
       "Plaza Los Pinos":"Cliente_Interno", "Raíces de Peñablanca":"Cliente_Interno", "Mirador Santa Teresita":"Cliente_Interno",
+      "Cromático":"Cliente_Interno",
       "GESTION Y VENTA":"Oficina_Central", "ADM Y LOGISTICA":"Oficina_Central", "LIBRE":"Oficina_Central", "VACACIONES":"Oficina_Central",
+      "Electromovilidad":"Oficina_Central",
       "Chalinga":"Cliente_Externo", "Clinica Viña del mar":"Cliente_Externo", "El Yugo":"Cliente_Externo", "Rio Claro":"Cliente_Externo"
     };
     const raw = [
-      ["Gerencia","Alex Balboa","Clinica Viña del mar",38.5], ["Gerencia","Alex Balboa","GESTION Y VENTA",35.5],
-      ["Gerencia","Alex Balboa","Raíces de Peñablanca",25.5], ["Gerencia","Alex Balboa","VACACIONES",23],
-      ["Gerencia","Alex Balboa","Chalinga",14], ["Gerencia","Alex Balboa","ADM Y LOGISTICA",13],
-      ["Gerencia","Alex Balboa","Condell",8.5], ["Gerencia","Alex Balboa","LIBRE",8.5],
-      ["Gerencia","Alex Balboa","Casas del Pinar 4",5], ["Gerencia","Alex Balboa","Plaza Los Pinos",4],
-      ["Gerencia","Alex Balboa","El Yugo",1], ["Gerencia","Alex Balboa","Rio Claro",1],
-      ["Ingenieria","Daniel Mesa","Mirador Santa Teresita",66], ["Ingenieria","Daniel Mesa","Casas del Pinar 4",37],
-      ["Ingenieria","Daniel Mesa","Raíces de Peñablanca",11.5], ["Ingenieria","Daniel Mesa","Condell",11],
-      ["Ingenieria","Daniel Mesa","VACACIONES",8], ["Ingenieria","Daniel Mesa","ADM Y LOGISTICA",4.5],
-      ["Ingenieria","Daniel Mesa","Plaza Los Pinos",4],
-      ["Terreno","Martin Rodrigues","Clinica Viña del mar",93], ["Terreno","Martin Rodrigues","LIBRE",42.5],
-      ["Terreno","Martin Rodrigues","Terraza Santa Maria",34], ["Terreno","Martin Rodrigues","Casas del Pinar 4",23],
-      ["Terreno","Martin Rodrigues","Condell",17],
-      ["Terreno","Gonzalo Armijo","Clinica Viña del mar",51], ["Terreno","Gonzalo Armijo","LIBRE",42.5],
-      ["Terreno","Gonzalo Armijo","Plaza Los Pinos",42], ["Terreno","Gonzalo Armijo","Terraza Santa Maria",34],
-      ["Terreno","Gonzalo Armijo","Casas del Pinar 4",23], ["Terreno","Gonzalo Armijo","Condell",17]
+      ["Gerencia","Alex Balboa","Clinica Viña del mar",63.5], ["Gerencia","Alex Balboa","ADM Y LOGISTICA",21.5],
+      ["Gerencia","Alex Balboa","Raíces de Peñablanca",20], ["Gerencia","Alex Balboa","Rio Claro",15.5],
+      ["Gerencia","Alex Balboa","LIBRE",14.5], ["Gerencia","Alex Balboa","Chalinga",12],
+      ["Gerencia","Alex Balboa","El Yugo",12], ["Gerencia","Alex Balboa","GESTION Y VENTA",5],
+      ["Gerencia","Alex Balboa","Electromovilidad",4.5], ["Gerencia","Alex Balboa","Condell",4],
+      ["Gerencia","Alex Balboa","Cromático",3], ["Gerencia","Alex Balboa","Plaza Los Pinos",2],
+      ["Gerencia","Alex Balboa","Casas del Pinar 4",0.5],
+      ["Ingenieria","Daniel Mesa","Mirador Santa Teresita",39], ["Ingenieria","Daniel Mesa","Rio Claro",21],
+      ["Ingenieria","Daniel Mesa","ADM Y LOGISTICA",10.5], ["Ingenieria","Daniel Mesa","LIBRE",10.5],
+      ["Ingenieria","Daniel Mesa","Chalinga",5],
+      ["Terreno","Martin Rodrigues","Clinica Viña del mar",159], ["Terreno","Martin Rodrigues","Terraza Santa Maria",14.5],
+      ["Terreno","Martin Rodrigues","LIBRE",8.5],
+      ["Terreno","Gonzalo Armijo","Clinica Viña del mar",165], ["Terreno","Gonzalo Armijo","Plaza Los Pinos",8.5],
+      ["Terreno","Gonzalo Armijo","LIBRE",8.5],
+      ["Terreno","Marcelo Armijo","Clinica Viña del mar",114], ["Terreno","Marcelo Armijo","LIBRE",8.5]
     ];
     const rows = raw.map(([area,persona,proyecto,horas]) => ({area, persona, proyecto, horas, categoria: CAT_BY_PROYECTO[proyecto] || "Sin categoría"}));
     const toSorted = (obj) => Object.entries(obj).sort((a,b)=>b[1]-a[1]);
     const sumBy = (keyFn) => { const o={}; rows.forEach(r => { const k=keyFn(r); o[k]=(o[k]||0)+r.horas; }); return toSorted(o); };
     const total = Math.round(rows.reduce((a,r)=>a+r.horas,0)*10)/10;
-    // Horas reales por persona y por mes, desde "Control_HH_Proyectos.Rev2.xlsx" (hoja Registro),
-    // leído vía SharePoint (08-09-2026 para Jun-Ago; 06-10-2026 para Sep, ya con 536 filas — Jun-Ago
-    // se re-verificaron y no cambiaron: 608,1 · 693,0 · 648,5 h).
-    const PERSONAS_ORDEN = ["Alex Balboa","Daniel Mesa","Martin Rodrigues","Gonzalo Armijo"];
+    // Horas reales por persona y por mes, desde "Control_HH_Proyectos.Rev3.xlsx" (hoja Registro),
+    // versión que llegó con el reporte financiero de octubre (02-11-2026). Jun-Sep re-verificados:
+    // sin cambios de Jun a Ago (608 · 693 · 648,5 h); septiembre recalculado a 738,5 h idéntico al
+    // mes pasado. Jun 2026 Alex sube de 175,6 a 175,5 (ajuste 0,1 h, dentro del redondeo).
+    const PERSONAS_ORDEN = ["Alex Balboa","Daniel Mesa","Martin Rodrigues","Gonzalo Armijo","Marcelo Armijo"];
     const porMesPersona = [
-      { mes:"Jun 2026", horas:{"Alex Balboa":175.6,"Daniel Mesa":149.5,"Martin Rodrigues":141.5,"Gonzalo Armijo":141.5} },
-      { mes:"Jul 2026", horas:{"Alex Balboa":191.0,"Daniel Mesa":168.0,"Martin Rodrigues":167.0,"Gonzalo Armijo":167.0} },
-      { mes:"Ago 2026", horas:{"Alex Balboa":162.5,"Daniel Mesa":161.0,"Martin Rodrigues":162.5,"Gonzalo Armijo":162.5} },
-      { mes:"Sep 2026", horas:{"Alex Balboa":177.5,"Daniel Mesa":142.0,"Martin Rodrigues":209.5,"Gonzalo Armijo":209.5} }
+      { mes:"Jun 2026", horas:{"Alex Balboa":175.5,"Daniel Mesa":149.5,"Martin Rodrigues":141.5,"Gonzalo Armijo":141.5,"Marcelo Armijo":0} },
+      { mes:"Jul 2026", horas:{"Alex Balboa":191.0,"Daniel Mesa":168.0,"Martin Rodrigues":167.0,"Gonzalo Armijo":167.0,"Marcelo Armijo":0} },
+      { mes:"Ago 2026", horas:{"Alex Balboa":162.5,"Daniel Mesa":161.0,"Martin Rodrigues":162.5,"Gonzalo Armijo":162.5,"Marcelo Armijo":0} },
+      { mes:"Sep 2026", horas:{"Alex Balboa":177.5,"Daniel Mesa":142.0,"Martin Rodrigues":209.5,"Gonzalo Armijo":209.5,"Marcelo Armijo":0} },
+      { mes:"Oct 2026", horas:{"Alex Balboa":178.0,"Daniel Mesa":86.0,"Martin Rodrigues":182.0,"Gonzalo Armijo":182.0,"Marcelo Armijo":122.5} }
     ];
-    // Costo por persona: se mantiene Jun-Ago a propósito. En el Excel financiero de septiembre la hoja
-    // "Variables" cambió las tarifas por rol y agregó roles nuevos (Capataz y Ayudante Eléctrico), así
-    // que el cruce persona→rol de Terreno ya no es obvio — se extiende a septiembre cuando Alex lo confirme.
+    // Costo por persona: se mantiene Jun-Ago a propósito. En el Excel financiero de Sep/Oct la hoja
+    // "Variables" cambió las tarifas por rol y agregó roles nuevos (Capataz y Ayudante Eléctrico, y
+    // en octubre se separaron también los valores por día/semana/hora), así que el cruce persona→rol
+    // de Terreno ya no es obvio — se extiende a Sep/Oct cuando Alex confirme el cruce nombre→rol.
     const mesesCosto = porMesPersona.slice(0, 3);
-    const costoPersona = PERSONAS_ORDEN.map(persona => {
+    const costoPersona = PERSONAS_ORDEN.filter(p => mesesCosto.some(m => (m.horas[p]||0) > 0)).map(persona => {
       const area = PERSON_AREA[strip(persona)];
       const valorHoraUF = ROLE_HOURLY_RATE_UF[area];
       const horasTotal = mesesCosto.reduce((a,m) => a + (m.horas[persona]||0), 0);
@@ -1093,23 +1152,28 @@
       };
     });
     return {
-      total, isDemo:true, periodo:"Septiembre 2026",
+      total, isDemo:true, periodo:"Octubre 2026",
       porProyecto: sumBy(r=>r.proyecto), porPersona: sumBy(r=>r.persona), porArea: sumBy(r=>r.area), porCategoria: sumBy(r=>r.categoria),
-      porMes:[["Jun 2026",608.1],["Jul 2026",693],["Ago 2026",648.5],["Sep 2026",total]],
+      porMes:[["Jun 2026",608],["Jul 2026",693],["Ago 2026",648.5],["Sep 2026",738.5],["Oct 2026",total]],
       porMesPersona, personasOrden: PERSONAS_ORDEN, costoPersona,
-      // HH acumuladas desde junio hasta el 30-09-2026 (hoja Registro) vs. HH presupuestadas (hoja Proyectos),
-      // ordenadas por % de consumo — la tarjeta muestra las 7 más exigidas.
+      // HH acumuladas desde junio hasta el 31-10-2026 (hoja Registro) vs. HH presupuestadas (hoja
+      // Proyectos del mismo Rev3), ordenadas por % de consumo. Terraza y Plaza Los Pinos vienen con
+      // presupuesto 0 en la hoja (son proyectos sin budget asignado, dedican horas sin tope) — se
+      // omiten de esta tarjeta. La tarjeta destaca las más exigidas.
       ejecucion:[
-        {name:"Casas del Pinar 4", presupuesto:90, consumido:159.5},
-        {name:"Condell", presupuesto:270, consumido:466},
-        {name:"GESTION Y VENTA", presupuesto:120, consumido:163},
-        {name:"ADM Y LOGISTICA", presupuesto:120, consumido:147},
-        {name:"Cromático", presupuesto:270, consumido:291.1},
-        {name:"LIBRE", presupuesto:450, consumido:246.5},
-        {name:"Mirador Santa Teresita", presupuesto:360, consumido:173.5},
-        {name:"Raíces de Peñablanca", presupuesto:180, consumido:86},
-        {name:"Chalinga", presupuesto:180, consumido:84.5},
-        {name:"Clinica Viña del mar", presupuesto:2520, consumido:182.5}
+        {name:"Condell", presupuesto:270, consumido:470},
+        {name:"Casas del Pinar 4", presupuesto:240, consumido:160},
+        {name:"ADM Y LOGISTICA", presupuesto:120, consumido:179},
+        {name:"GESTION Y VENTA", presupuesto:120, consumido:168},
+        {name:"Cromático", presupuesto:270, consumido:294},
+        {name:"LIBRE", presupuesto:450, consumido:297},
+        {name:"Chalinga", presupuesto:180, consumido:101.5},
+        {name:"Mirador Santa Teresita", presupuesto:360, consumido:212.5},
+        {name:"Raíces de Peñablanca", presupuesto:180, consumido:106},
+        {name:"El Yugo", presupuesto:90, consumido:43.5},
+        {name:"Clinica Viña del mar", presupuesto:2520, consumido:684},
+        {name:"Electromovilidad", presupuesto:45, consumido:24.5},
+        {name:"Rio Claro", presupuesto:360, consumido:37.5}
       ],
       rows
     };
